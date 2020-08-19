@@ -1,5 +1,8 @@
 module HTM (spacialPooler, temporalPooler) where
 
+import           Data.Maybe
+import           System.Random
+
 -- MODEL
 data Config = Config {
   nrOfColumns                  :: Int
@@ -8,6 +11,7 @@ data Config = Config {
   , mappingType                :: MappingType
   , inputType                  :: InputType
   , initSensoryDendritesWeight :: Float
+  , initConnectionStrength     :: Float
 }
 
 -- Region
@@ -25,7 +29,7 @@ data Column = Column {
 }
 
 data Cell = Cell {
-  cell        :: [Segment]
+  segments    :: [Segment]
   , cellState :: CellState
 }
 data ColumnState = ActiveColumn | InactiveColumn
@@ -86,7 +90,7 @@ initColumns config input mapping = [singleColumn index config input mapping | in
 singleColumn :: Int -> Config -> InputField -> MappingType -> Column
 singleColumn index config input mapping = Column {
   cells = initCells config
-  , inputField = initSensoryDendrites index input mapping
+  , inputField = initSensoryDendrites index config input mapping
   , howActive = 0.0 -- the average rate of activation
   , columnState = InactiveColumn
 }
@@ -96,17 +100,41 @@ initCells config = [singleCell | _ <- [0..(nrOfCellsPerColumn config)]] -- TODO
 
 singleCell :: Cell
 singleCell = Cell {
-  cell = [] -- TODO init segments
+  segments = [] -- TODO init segments
   , cellState = InactiveCell
 }
 
-initSensoryDendrites :: Int -> InputField -> MappingType -> [SensoryDendrite]
-initSensoryDendrites index input mapping
-  | mapping == Random = map (\x -> (x,0)) $ drop (index) $ take (index + 10) $ portal input --TODO choose random subset of inputfield portal choose init connection strength
-  | mapping == SlidingWindow = map (\x -> (x,0)) $ take 10 $ portal input -- TODO choose a SlidingWindow from inputfield
--- Mapping between lists
-data MappingType = Random | SlidingWindow deriving (Eq)
+initSensoryDendrites :: Int -> Config -> InputField -> MappingType -> [SensoryDendrite]
+initSensoryDendrites index config input mapping
+  | mapping == Random = map (\x -> (x, initConnectionStrength config)) $ selectRandom index $ portal input --TODO choose random subset of inputfield portal choose init connection strength
+  | mapping == SlidingWindow = map (\x -> (x, initConnectionStrength config)) $ slidingWindow index $ portal input -- TODO choose a SlidingWindow from inputfield
+  | mapping == WrappedSlidingWindow = map (\x -> (x, initConnectionStrength config)) $ wrappedSlidingWindow index $  portal input
 
+
+selectRandom index ls = randElems 10 index ls
+
+randElems :: Int -> Int ->[a] -> [a]
+randElems n index ls
+  | n < 0 = []
+  | n == 0 = []
+  | n > 0 = randElem index ls : randElems (n-1) index ls
+
+
+
+randElem :: Int -> [a] -> a -- does not work for empty list
+randElem index ls =  let g = mkStdGen index in
+                          (\l g -> l !! fst (randomR (0, length l) g)) ls g
+
+slidingWindow index ls = drop (index) $ take (index + 10) ls
+wrappedSlidingWindow index ls = drop (index) $ take (index + 10) ls
+
+-- Mapping between lists
+data MappingType = Random | SlidingWindow | WrappedSlidingWindow deriving (Eq)
+
+
+
+initSegments :: Region -> Region -- TODO
+initSegments r = r
 
 -- for each input[i] -> create a list of indexes from the output
 type ValueMappingType = InputField -> Region -> Region
