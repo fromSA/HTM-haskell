@@ -1,21 +1,47 @@
 module HTM (spacialPooler, temporalPooler) where
 
-import           Data.Maybe
 import           System.Random
 
 -- MODEL
+
+-- Config
 data Config = Config {
-  nrOfColumns                  :: Int
-  , nrOfCellsPerColumn         :: Int
-  , nrOfInputBits              :: Int
-  , mappingType                :: MappingType
-  , inputType                  :: InputType
-  , initSensoryDendritesWeight :: Float
-  , initConnectionStrength     :: Float
+  nrOfColumns              :: Int
+  , nrOfCellsPerColumn     :: Int
+  , maxNrOfInputBits       :: Int
+  , mappingType            :: MappingType
+  , initConnectionStrength :: Float
+  , sdrRange               :: SDRRange
 }
 
--- Region
 
+-- SDR
+data Encoder = Numeric | Categorical
+{- Numeric Range
+  | NumbericLog -- These are types of encodings.
+  | Delta
+  | Category Cyclic Order
+  | Geospatial Range Speed
+  | Text
+
+data Range = Bounded | UnBounded
+data InputValue = Number | Vector
+data Number = Continues Range | Discrete Range
+-}
+data SDRRange = InputField{
+  minIndex  :: BitIndex
+  ,maxIndex :: BitIndex
+  }
+type SDR = [BitIndex]
+type BitIndex = Int
+
+
+-- Mapper between SDR and Region
+data MappingType = Random
+
+
+
+-- Region
 data Region = Region {
   currentStep  :: [Column],
   previousStep :: [Column]
@@ -23,10 +49,11 @@ data Region = Region {
 
 data Column = Column {
   cells         :: [Cell]
-  , inputField  :: [SensoryDendrite]
-  , howActive   :: Float -- the average rate of activation
+  , inputField  :: [FeedForwardSynapse]
+  , howActive   :: Float -- TODO the average rate of activation
   , columnState :: ColumnState
 }
+type FeedForwardSynapse = (BitIndex, ConnectionStrength)
 
 data Cell = Cell {
   segments    :: [Segment]
@@ -36,117 +63,69 @@ data ColumnState = ActiveColumn | InactiveColumn
 data CellState = ActiveCell | InactiveCell | PredictiveCell
 
 type Segment = [Dendrite]
-type SensoryDendrite = (SensoryPixel, ConnectionStrength)
 type Dendrite = [Synapse]
-data Synapse = Dentrite {
-  source               :: Source
-  , destination        :: Destination
-  , connectionStrength :: ConnectionStrength
+data Synapse = Synapse {
+  source               :: Cell -- where the input is coming from
+  , destination        :: Cell -- where the input is going too
+  , connectionStrength :: ConnectionStrength -- i.e. permenanceValue
 }
-type Destination = Cell
-type Source = Cell
-type SensoryPixel = Bool
-type ConnectionStrength = Float
+type ConnectionStrength = Float -- Between 0 and 1
+type ColumnIndex = Int -- unsigned int
+type CellIndex = Int -- unsigned int
 
--- InputField
-
-data InputField = InputField {
-  portal :: [Bool]
-  , kind :: InputType
-}
-data InputType = Circular | Linear Range
-data Range = Bounded | UnBounded
-
+-- for each Column[i] -> create a choose random of indexes from the SDR
 -- Initialize
 
-type Size = Int
-initInputField :: Config -> InputField -- TODO incomplete cases
-initInputField config =
-  case inputType config of
-    Circular -> InputField {
-      kind = inputType config
-      , portal = [] -- TODO circular case
-      }
-    Linear range ->
-      case range of
-          Bounded -> InputField { kind = inputType config
-            , portal = [False | _ <- [0.. nrOfInputBits config]]
-          }
-          UnBounded -> InputField {
-            kind = inputType config
-            , portal = [] -- TODO unbounded case
-            }
+initRegion :: Config -> Region  -- TODO do I initialze the segments?
+initRegion config =
+  let columns = initSegments config $ initColumns config in
+    Region {
+    currentStep = columns
+    , previousStep = (replicate 2 columns) !! 1 -- make a copy of region by using (replicate 2 region)
+    }
 
-initRegion :: Config -> InputField -> MappingType -> Region
-initRegion config input mapping = Region {
-  currentStep = initColumns config input mapping
-  , previousStep = initColumns config input mapping
-}
+initColumns :: Config -> [Column]
+initColumns config = [singleColumn columnIndex config | columnIndex <- [0..nrOfColumns config]]
 
-initColumns :: Config -> InputField -> MappingType -> [Column]
-initColumns config input mapping = [singleColumn index config input mapping | index <- [1..nrOfColumns config]]
-
-
-singleColumn :: Int -> Config -> InputField -> MappingType -> Column
-singleColumn index config input mapping = Column {
+singleColumn :: Int -> Config -> Column
+singleColumn columnIndex config = Column {
   cells = initCells config
-  , inputField = initSensoryDendrites index config input mapping
-  , howActive = 0.0 -- the average rate of activation
+  , inputField = initFeedForwardSynapses columnIndex config
+  , howActive = 0.0 -- TODO the average rate of activation
   , columnState = InactiveColumn
 }
 
 initCells :: Config -> [Cell]
-initCells config = [singleCell | _ <- [0..(nrOfCellsPerColumn config)]] -- TODO
+initCells config = [singleCell | _ <- [0..(nrOfCellsPerColumn config)]]
 
 singleCell :: Cell
 singleCell = Cell {
-  segments = [] -- TODO init segments
+  segments = [] -- TODO init segments?
   , cellState = InactiveCell
 }
 
-initSensoryDendrites :: Int -> Config -> InputField -> MappingType -> [SensoryDendrite]
-initSensoryDendrites index config input mapping
-  | mapping == Random = map (\x -> (x, initConnectionStrength config)) $ selectRandom index $ portal input --TODO choose random subset of inputfield portal choose init connection strength
-  | mapping == SlidingWindow = map (\x -> (x, initConnectionStrength config)) $ slidingWindow index $ portal input -- TODO choose a SlidingWindow from inputfield
-  | mapping == WrappedSlidingWindow = map (\x -> (x, initConnectionStrength config)) $ wrappedSlidingWindow index $  portal input
+initSegments :: Config -> [Column] -> [Column]
+initSegments config columns = columns -- TODO ?
 
 
-selectRandom index ls = randElems 10 index ls
+-- init mapping between sdr indecies and Columns in the region
+initFeedForwardSynapses :: ColumnIndex -> Config -> [FeedForwardSynapse]
+initFeedForwardSynapses cI con = [singleFeedForwardSynapse bI con | bI <- selectRandomIndecies cI con]
 
-randElems :: Int -> Int ->[a] -> [a]
-randElems n index ls
-  | n < 0 = []
-  | n == 0 = []
-  | n > 0 = randElem index ls : randElems (n-1) index ls
+selectRandomIndecies :: ColumnIndex -> Config -> [BitIndex]
+selectRandomIndecies cI con = randIndecies (maxNrOfInputBits con) cI (sdrRange con)
 
+randIndecies :: Int -> ColumnIndex -> SDRRange -> [BitIndex]
+randIndecies n cI sR
+  | n <= 0 = []
+  | n > 0 = randIndex cI sR : randIndecies (n-1) cI sR --TODO double check that no duplicates occure
 
+randIndex :: ColumnIndex -> SDRRange -> BitIndex -- does not work for empty list
+randIndex cI cR =  let g = mkStdGen cI in
+                      fst (randomR (minIndex cR, maxIndex cR) g)
 
-randElem :: Int -> [a] -> a -- does not work for empty list
-randElem index ls =  let g = mkStdGen index in
-                          (\l g -> l !! fst (randomR (0, length l) g)) ls g
-
-slidingWindow index ls = drop (index) $ take (index + 10) ls
-wrappedSlidingWindow index ls = drop (index) $ take (index + 10) ls
-
--- Mapping between lists
-data MappingType = Random | SlidingWindow | WrappedSlidingWindow deriving (Eq)
-
-
-
-initSegments :: Region -> Region -- TODO
-initSegments r = r
-
--- for each input[i] -> create a list of indexes from the output
-type ValueMappingType = InputField -> Region -> Region
--- trivial
-map1 :: ValueMappingType
-map1 inputField region =
-  case kind inputField of
-    Circular -> region
-    Linear range ->
-      case range of
-        Bounded   -> region -- TODO InputField $ (currentStep region) !! 0
-        UnBounded -> region -- TODO
+singleFeedForwardSynapse :: BitIndex -> Config -> (BitIndex, ConnectionStrength)
+singleFeedForwardSynapse index config = (index, initConnectionStrength config) -- TODO set initConnectionStrength defined by a kernel function.
 
 
 -- UPDATE
@@ -157,11 +136,11 @@ updatePermanence r = r -- TODO
 boost :: Region -> Region
 boost r = r -- TODO
 
-activateColumns :: InputField-> Region -> Region
+activateColumns :: SDR-> Region -> Region
 activateColumns i r = r -- TODO
 
 -- TODO applie a spacialPooler on a region
-spacialPooler :: InputField-> Region -> Region
+spacialPooler :: SDR-> Region -> Region
 spacialPooler i r = updatePermanence . boost . activateColumns i $ r
 -- first map input to region
 -- second activate columns based on their input region
