@@ -9,8 +9,9 @@ data Config = Config {
   nrOfColumns              :: Int
   , nrOfCellsPerColumn     :: Int
   , maxNrOfInputBits       :: Int
+  , nrOfSynapsesPerCell    :: Int
   , mappingType            :: MappingType
-  , initConnectionStrength :: Float
+  , initConnectionStrength :: Float -- on the synapses between cells in a region
   , sdrRange               :: SDRRange
 }
 
@@ -56,19 +57,20 @@ data Column = Column {
 type FeedForwardSynapse = (BitIndex, ConnectionStrength)
 
 data Cell = Cell {
-  segments    :: [Segment]
+  dendrites   :: [Dendrite]
   , cellState :: CellState
-}
-data ColumnState = ActiveColumn | InactiveColumn
-data CellState = ActiveCell | InactiveCell | PredictiveCell
+} deriving (Eq)
 
-type Segment = [Dendrite]
-type Dendrite = [Synapse]
+data ColumnState = ActiveColumn | InactiveColumn deriving (Eq)
+data CellState = ActiveCell | InactiveCell | PredictiveCell deriving (Eq)
+
+type Dendrite = [Segment]
+type Segment = [Synapse]
 data Synapse = Synapse {
   source               :: Cell -- where the input is coming from
   , destination        :: Cell -- where the input is going too
   , connectionStrength :: ConnectionStrength -- i.e. permenanceValue
-}
+} deriving (Eq)
 type ConnectionStrength = Float -- Between 0 and 1
 type ColumnIndex = Int -- unsigned int
 type CellIndex = Int -- unsigned int
@@ -78,7 +80,7 @@ type CellIndex = Int -- unsigned int
 
 initRegion :: Config -> Region  -- TODO do I initialze the segments?
 initRegion config =
-  let columns = initSegments config $ initColumns config in
+  let columns = initDendrites config $ initColumns config in
     Region {
     currentStep = columns
     , previousStep = (replicate 2 columns) !! 1 -- make a copy of region by using (replicate 2 region)
@@ -100,12 +102,55 @@ initCells config = [singleCell | _ <- [0..(nrOfCellsPerColumn config)]]
 
 singleCell :: Cell
 singleCell = Cell {
-  segments = [] -- TODO init segments?
+  dendrites = []
   , cellState = InactiveCell
 }
 
-initSegments :: Config -> [Column] -> [Column]
-initSegments config columns = columns -- TODO ?
+
+
+
+-- Init Dendrites
+
+
+initDendrites :: Config -> [Column] -> [Column]
+initDendrites config columns = map (initDendritePerColumn config columns) columns
+
+initDendritePerColumn :: Config -> [Column] -> Column -> Column
+initDendritePerColumn config columns column = column {
+  cells = map (initDendritePerCell config columns) (cells column)
+}
+
+initDendritePerCell :: Config -> [Column] -> Cell -> Cell
+initDendritePerCell config columns cell = cell {
+  dendrites = createDendrites config cell columns
+}
+
+
+createDendrites :: Config -> Cell -> [Column] -> [Dendrite]
+createDendrites config cell columns = [createDendrite config cell columns]
+
+createDendrite :: Config -> Cell -> [Column] -> [Segment]
+createDendrite config cell columns = [createSegment config cell columns]
+
+createSegment :: Config -> Cell -> [Column] -> [Synapse]
+createSegment config cell columns = [createSynapse config cell columns | _ <- [1.. (nrOfSynapsesPerCell config)] ]
+
+createSynapse :: Config -> Cell -> [Column] -> Synapse
+createSynapse config cell columns = Synapse {
+  source = cell
+  , destination = getRandomCell config cell columns
+  , connectionStrength = initConnectionStrength config
+}
+
+
+-- TODO fix this, it is ugly!
+getRandomCell :: Config -> Cell -> [Column] -> Cell
+getRandomCell config notCell columns = let randColumnIndex = getRandomIndexBetween 0 1 (nrOfColumns config) in -- todo need a random seed
+                                          let randCellIndex = getRandomIndexBetween 0 1 (nrOfCellsPerColumn config) in -- todo need a random seed
+                                            let randCell = (cells (columns !! randColumnIndex)) !! randCellIndex in
+                                              if randCell == notCell
+                                                then getRandomCell config notCell columns
+                                                else randCell
 
 
 -- init mapping between sdr indecies and Columns in the region
@@ -120,13 +165,16 @@ randIndecies n cI sR
   | n <= 0 = []
   | n > 0 = randIndex cI sR : randIndecies (n-1) cI sR --TODO double check that no duplicates occure
 
-randIndex :: ColumnIndex -> SDRRange -> BitIndex -- does not work for empty list
-randIndex cI cR =  let g = mkStdGen cI in
-                      fst (randomR (minIndex cR, maxIndex cR) g)
+
+getRandomIndexBetween :: Int -> Int -> Int -> BitIndex
+getRandomIndexBetween seed mi ma = let g = mkStdGen seed in
+                                      fst (randomR (mi, ma) g)
+
+randIndex :: ColumnIndex -> SDRRange -> BitIndex
+randIndex cI cR =  getRandomIndexBetween cI (minIndex cR) (maxIndex cR)
 
 singleFeedForwardSynapse :: BitIndex -> Config -> (BitIndex, ConnectionStrength)
 singleFeedForwardSynapse index config = (index, initConnectionStrength config) -- TODO set initConnectionStrength defined by a kernel function.
-
 
 -- UPDATE
 
