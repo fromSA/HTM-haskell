@@ -1,8 +1,13 @@
 module HTM (spacialPooler, temporalPooler) where
 
+import           Data.List     (intercalate)
 import           System.Random
 
--- MODEL
+{-
+
+  MODEL
+
+-}
 
 -- Config
 data Config = Config {
@@ -29,40 +34,76 @@ data Range = Bounded | UnBounded
 data InputValue = Number | Vector
 data Number = Continues Range | Discrete Range
 -}
-data SDRRange = InputField{
-  minIndex  :: BitIndex
+data SDRRange = SDRRange{
+  minIndex  :: BitIndex -- TODO remove this for an implisit minIndex = 0
   ,maxIndex :: BitIndex
   }
 type SDR = [BitIndex]
 type BitIndex = Int
+
+data SDRConfig = SDRConfig{
+  minVal          :: Int
+  , maxVal        :: Int
+  , buckets       :: Int
+  , bitsPerBucket :: Int
+}
+
+-- The total number of bits used SDR
+totNrBits :: SDRConfig -> Int
+totNrBits config = sum (map ($ config) [buckets, bitsPerBucket]) - 1
+
+-- TODO take an input and convert it to an SDR
+encode :: Int -> SDRConfig -> SDR
+encode n config = let start = getStartOf n config in
+  [start + i | i <- [0..bitsPerBucket config]]
+
+getStartOf :: Int -> SDRConfig -> Int
+getStartOf n config = floor $ realToFrac (n - (minVal config)) / (realToFrac ((maxVal config) - (minVal config)))
 
 
 -- Mapper between SDR and Region
 data MappingType = Random
 
 
-
--- Region
+-- REGION
 data Region = Region {
   currentStep  :: [Column],
   previousStep :: [Column]
 }
 
+instance Show Region where
+  show region = show $ currentStep region
+
 data Column = Column {
   cells         :: [Cell]
   , inputField  :: [FeedForwardSynapse]
-  , howActive   :: Float -- TODO the average rate of activation
+  , howActive   :: MovingAverage -- TODO the average rate of activation
   , columnState :: ColumnState
 }
+
+instance Show Column where
+  show column = intercalate "" $ map show $ cells column
+
 type FeedForwardSynapse = (BitIndex, ConnectionStrength)
+
+instance Show Cell where
+  show (cell) = show $ cellState cell
 
 data Cell = Cell {
   dendrites   :: [Dendrite]
   , cellState :: CellState
 } deriving (Eq)
 
+
+
 data ColumnState = ActiveColumn | InactiveColumn deriving (Eq)
 data CellState = ActiveCell | InactiveCell | PredictiveCell deriving (Eq)
+
+instance Show CellState where
+  show state
+    | state == ActiveCell = "1"
+    | state == InactiveCell = "0"
+    | state == PredictiveCell = "p"
 
 type Dendrite = [Segment]
 type Segment = [Synapse]
@@ -75,15 +116,36 @@ type ConnectionStrength = Float -- Between 0 and 1
 type ColumnIndex = Int -- unsigned int
 type CellIndex = Int -- unsigned int
 
--- for each Column[i] -> create a choose random of indexes from the SDR
--- Initialize
+-- MovingAverage
+data MovingAverage = MovingAverage [BitIndex] deriving (Show)
 
-initRegion :: Config -> Region  -- TODO do I initialze the segments?
+-- get the average of MovingAverage
+getAverage :: MovingAverage -> Float
+getAverage (MovingAverage bits) = fromIntegral (sum bits) / fromIntegral (length bits)
+
+-- append 1 to the MovingAverage
+on :: MovingAverage -> MovingAverage
+on (MovingAverage bits) = (MovingAverage (1 : bits))
+
+-- append a 0 to MovingAverage
+off :: MovingAverage -> MovingAverage
+off (MovingAverage bits) = (MovingAverage (0 : bits))
+
+
+-- for each Column[i] -> create a choose random of indexes from the SDR
+
+{-
+
+  Initialize
+
+-}
+
+initRegion :: Config -> Region
 initRegion config =
-  let columns = initDendrites config $ initColumns config in
+  let regions = replicate 2 $ initDendrites config $ initColumns config in -- make a copy of region
     Region {
-    currentStep = columns
-    , previousStep = (replicate 2 columns) !! 1 -- make a copy of region by using (replicate 2 region)
+    currentStep = head regions
+    , previousStep = head . tail $ regions
     }
 
 initColumns :: Config -> [Column]
@@ -93,7 +155,7 @@ singleColumn :: Int -> Config -> Column
 singleColumn columnIndex config = Column {
   cells = initCells config
   , inputField = initFeedForwardSynapses columnIndex config
-  , howActive = 0.0 -- TODO the average rate of activation
+  , howActive = (MovingAverage []) -- TODO the average rate of activation
   , columnState = InactiveColumn
 }
 
@@ -107,10 +169,7 @@ singleCell = Cell {
 }
 
 
-
-
--- Init Dendrites
-
+-- Init DENDRITE
 
 initDendrites :: Config -> [Column] -> [Column]
 initDendrites config columns = map (initDendritePerColumn config columns) columns
@@ -165,7 +224,6 @@ randIndecies n cI sR
   | n <= 0 = []
   | n > 0 = randIndex cI sR : randIndecies (n-1) cI sR --TODO double check that no duplicates occure
 
-
 getRandomIndexBetween :: Int -> Int -> Int -> BitIndex
 getRandomIndexBetween seed mi ma = let g = mkStdGen seed in
                                       fst (randomR (mi, ma) g)
@@ -176,7 +234,12 @@ randIndex cI cR =  getRandomIndexBetween cI (minIndex cR) (maxIndex cR)
 singleFeedForwardSynapse :: BitIndex -> Config -> (BitIndex, ConnectionStrength)
 singleFeedForwardSynapse index config = (index, initConnectionStrength config) -- TODO set initConnectionStrength defined by a kernel function.
 
--- UPDATE
+
+{-
+
+  UPDATE
+
+-}
 
 updatePermanence :: Region -> Region
 updatePermanence r = r -- TODO
@@ -190,7 +253,7 @@ activateColumns i r = r -- TODO
 -- TODO applie a spacialPooler on a region
 spacialPooler :: SDR-> Region -> Region
 spacialPooler i r = updatePermanence . boost . activateColumns i $ r
--- first map input to region
+-- first map input to region -- DONE
 -- second activate columns based on their input region
 -- Boost the column (to maintain a fixed sparcity)
 -- update permenance values of each Sensory
@@ -205,4 +268,43 @@ temporalPooler m = m
   -- For cells with n nr of Active Dentrite -> Predict state
   -- Update PermenanceValue between
 
--- VIEW
+
+
+-- TODO
+-- Clean up and improve Code
+-- Add a function that creates a segment
+-- Implement spacial pooler
+-- Implement temporal pooler
+
+
+
+{-
+
+  VIEW
+
+-}
+
+main = do
+  let sdrConfig = initSDRConfig
+  let config = initConfig initSDRConfig
+  let region = initRegion config
+  print region
+
+initConfig :: SDRConfig -> Config
+initConfig sdrConfig = Config{
+   nrOfColumns              = 100
+   , nrOfCellsPerColumn     = 1
+   , maxNrOfInputBits       = 1
+   , nrOfSynapsesPerCell    = 1
+   , mappingType            = Random
+   , initConnectionStrength = 1.0 -- on the synapses between cells in a region, should be a kernel function
+   , sdrRange               = SDRRange {minIndex  = 0, maxIndex = totNrBits sdrConfig}
+}
+
+initSDRConfig :: SDRConfig
+initSDRConfig = SDRConfig{
+  minVal          = 0
+  , maxVal        = 100
+  , buckets       = 100
+  , bitsPerBucket = 5
+}
