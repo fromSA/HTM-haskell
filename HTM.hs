@@ -1,270 +1,56 @@
-module HTM (spacialPooler, temporalPooler) where
+{-|
+Module      : HTM
+Description : Short description
+Copyright   : (c) Fromsa Hera, 2020
+                  Numenta, 2020
+License     : GPL-3
+Maintainer  : fromsahera28@email.com
+Stability   : experimental
+Portability : POSIX
+
+Here is a longer description of this module, containing some
+commentary with @some markup@.
+-}
+module HTM (
+  -- * Some functions
+  spacialPooler, temporalPooler) where
 
 import           Data.List     (intercalate, sortOn)
 import           System.Random
-{-
+import           MovingAverage 
+import           SDR           (SDR, SDRConfig(..), SDRRange(..), encode, totNrBits)
+import           Region
 
-  MODEL
+-- -------------------------------------------------------------
+--                           CONFIG
+-- -------------------------------------------------------------
 
--}
-
--- Config
-data Config = Config {
-  nrOfColumns              :: Int
-  , nrOfCellsPerColumn     :: Int
-  , maxNrOfInputBits       :: Int
-  , nrOfSynapsesPerCell    :: Int
-  , mappingType            :: MappingType
-  , initConnectionStrength :: Float -- on the synapses between cells in a region
-  , sdrRange               :: SDRRange
-  , overlapThreshold       :: Int -- between inputField and column
-  , pConthresh             :: Float -- permanence connected threshold on a synapse
-  , colActLev              :: Int -- the desired column activity level within inhibition radius
+-- |The configuration parameters for the HTM algorithm.
+data HTMConfig = HTMConfig{
+  overlapThreshold         :: Int -- ^ The threshold for column activation. If the number of active bits in the inputfield of a column >= this threshold, then the column becomes active.
+  , pConthresh             :: Float -- ^ A synapse with connection strength >= this threshold is considered permenantly connected.
+  , colActLev              :: Int -- ^ The desired column activity level within inhibition radius i.e. the number of columns in that should be activated within a activaiton radius.
+  , proxSynConInc :: Float -- ^The amount to decrease the connection strength of a synapses with for proximal synapses 
+  , proxSynConDec :: Float -- ^The amount to decrease the connection strength of a synapses with for proximal synapses 
+  , mop :: Float -- ^The minimum percent of active bits in inputField expected to have a overlap with.
+  , boostStrength :: Float -- ^The strength of boost value between about 0
+  , targetDensity :: Float -- ^The desired percent of active duty cycle within the sliding window.
 }
 
 
--- SDR
-data Encoder = Numeric | Categorical
-{- Numeric Range
-  | NumbericLog -- These are types of encodings.
-  | Delta
-  | Category Cyclic Order
-  | Geospatial Range Speed
-  | Text
-
-data Range = Bounded | UnBounded
-data InputValue = Number | Vector
-data Number = Continues Range | Discrete Range
--}
-data SDRRange = SDRRange{
-  minIndex  :: BitIndex -- TODO remove this for an implisit minIndex = 0
-  ,maxIndex :: BitIndex
-  }
-type SDR = [BitIndex]
-type BitIndex = Int
-
-data SDRConfig = SDRConfig{
-  minVal          :: Int
-  , maxVal        :: Int
-  , buckets       :: Int
-  , bitsPerBucket :: Int
-}
-
--- The total number of bits used SDR
-totNrBits :: SDRConfig -> Int
-totNrBits config = sum (map ($ config) [buckets, bitsPerBucket]) - 1
-
--- TODO take an input and convert it to an SDR
-encode :: Int -> SDRConfig -> SDR
-encode n config = let start = getStartOf n config in
-  [start + i | i <- [0..(bitsPerBucket config - 1)]]
-
-getStartOf :: Int -> SDRConfig -> Int
-getStartOf n config = floor $  realToFrac ((buckets config) * (n - (minVal config))) / (realToFrac ((maxVal config) - (minVal config)))
+-- -------------------------------------------------------------
+--                           UPDATE
+-- -------------------------------------------------------------
 
 
--- Mapper between SDR and Region
-data MappingType = Random
-
-
--- REGION
-data Region = Region {
-  currentStep  :: [Column],
-  previousStep :: [Column]
-}
-
-instance Show Region where
-  show = show . currentStep 
-
-data Column = Column {
-  cells         :: [Cell]
-  , inputField  :: [FeedForwardSynapse]
-  , howActive   :: MovingAverage -- TODO the average rate of activation
-  , columnState :: ColumnState
-  , boost       :: Float -- should maybe be Float, should be at least 1
-  , overlap     :: Int
-  , inhibRad    :: Int
-}
-
-instance Eq Column where
-  c1 == c2 = (inputField c1) == (inputField c2)
-
-instance Show Column where
-  show  = show . overlap 
-  --show column = intercalate "" $ map show $ cells column
-
-type FeedForwardSynapse = (BitIndex, ConnectionStrength)
-
-instance Show Cell where
-  show = show . cellState 
-
-data Cell = Cell {
-  dendrites   :: [Dendrite]
-  , cellState :: CellState
-} deriving (Eq)
-
-
-
-data ColumnState = ActiveColumn | InactiveColumn deriving (Eq)
-instance Show ColumnState where
-  show ActiveColumn = "1"
-  show InactiveColumn = "0"
-
-data CellState = ActiveCell | InactiveCell | PredictiveCell deriving (Eq)
-
-instance Show CellState where
-  show ActiveCell = "1"
-  show InactiveCell = "0"
-  show PredictiveCell = "p"
-
-type Dendrite = [Segment]
-type Segment = [Synapse]
-data Synapse = Synapse {
-  source               :: Cell -- where the input is coming from
-  , destination        :: Cell -- where the input is going too
-  , connectionStrength :: ConnectionStrength -- i.e. permenanceValue
-} deriving (Eq)
-type ConnectionStrength = Float -- Between 0 and 1
-type ColumnIndex = Int -- unsigned int
-type CellIndex = Int -- unsigned int
-
--- MovingAverage
-data MovingAverage = MovingAverage [BitIndex] deriving (Show)
-
--- get the average of MovingAverage
-getAverage :: MovingAverage -> Float
-getAverage (MovingAverage bits) = fromIntegral (sum bits) / fromIntegral (length bits)
-
--- append 1 to the MovingAverage
-on :: MovingAverage -> MovingAverage
-on (MovingAverage bits) = (MovingAverage (1 : bits))
-
--- append a 0 to MovingAverage
-off :: MovingAverage -> MovingAverage
-off (MovingAverage bits) = (MovingAverage (0 : bits))
-
-
--- for each Column[i] -> create a choose random of indexes from the SDR
-
-{-
-
-  Initialize
-
--}
-
-initRegion :: Config -> Region
-initRegion config =
-  let regions = replicate 2 $ initDendrites config $ initColumns config in -- make a copy of region
-    Region {
-    currentStep = head regions
-    , previousStep = head . tail $ regions
-    }
-
-initColumns :: Config -> [Column]
-initColumns config = [singleColumn columnIndex config | columnIndex <- [0..nrOfColumns config]]
-
-singleColumn :: Int -> Config -> Column
-singleColumn columnIndex config = Column {
-  cells = initCells config
-  , inputField = initFeedForwardSynapses columnIndex config
-  , howActive = (MovingAverage []) -- TODO the average rate of activation
-  , columnState = InactiveColumn
-  , boost       = 1 -- should maybe be Float
-  , overlap     = 0
-  , inhibRad    = 0
-}
-
-initCells :: Config -> [Cell]
-initCells config = [singleCell | _ <- [0..(nrOfCellsPerColumn config)]]
-
-singleCell :: Cell
-singleCell = Cell {
-  dendrites = []
-  , cellState = InactiveCell
-}
-
-
--- Init DENDRITE
-
-initDendrites :: Config -> [Column] -> [Column]
-initDendrites config columns = map (initDendritePerColumn config columns) columns
-
-initDendritePerColumn :: Config -> [Column] -> Column -> Column
-initDendritePerColumn config columns column = column {
-  cells = map (initDendritePerCell config columns) (cells column)
-}
-
-initDendritePerCell :: Config -> [Column] -> Cell -> Cell
-initDendritePerCell config columns cell = cell {
-  dendrites = createDendrites config cell columns
-}
-
-
-createDendrites :: Config -> Cell -> [Column] -> [Dendrite]
-createDendrites config cell columns = [createDendrite config cell columns]
-
-createDendrite :: Config -> Cell -> [Column] -> [Segment]
-createDendrite config cell columns = [createSegment config cell columns]
-
-createSegment :: Config -> Cell -> [Column] -> [Synapse]
-createSegment config cell columns = [createSynapse config cell columns | _ <- [1.. (nrOfSynapsesPerCell config)] ]
-
-createSynapse :: Config -> Cell -> [Column] -> Synapse
-createSynapse config cell columns = Synapse {
-  source = cell
-  , destination = getRandomCell config cell columns
-  , connectionStrength = initConnectionStrength config
-}
-
-
--- TODO fix this, it is ugly!
-getRandomCell :: Config -> Cell -> [Column] -> Cell
-getRandomCell config notCell columns = let randColumnIndex = getRandomIndexBetween 0 1 (nrOfColumns config) in -- todo need a random seed
-                                          let randCellIndex = getRandomIndexBetween 0 1 (nrOfCellsPerColumn config) in -- todo need a random seed
-                                            let randCell = (cells (columns !! randColumnIndex)) !! randCellIndex in
-                                              if randCell == notCell
-                                                then getRandomCell config notCell columns
-                                                else randCell
-
-
--- init mapping between sdr indecies and Columns in the region
-initFeedForwardSynapses :: ColumnIndex -> Config -> [FeedForwardSynapse]
-initFeedForwardSynapses cI con = [singleFeedForwardSynapse bI con | bI <- selectRandomIndecies cI con] -- FIXME this is a list of the synapses 
-
-selectRandomIndecies :: ColumnIndex -> Config -> [BitIndex]
-selectRandomIndecies cI con = randIndecies (maxNrOfInputBits con) cI (sdrRange con)
-
-randIndecies :: Int -> ColumnIndex -> SDRRange -> [BitIndex]
-randIndecies n cI sR
-  | n <= 0 = []
-  | n > 0 = randIndex cI sR : randIndecies (n-1) cI sR -- TODO double check that no duplicates occure
-
-getRandomIndexBetween :: Int -> Int -> Int -> BitIndex
-getRandomIndexBetween seed mi ma = let g = mkStdGen seed in
-                                      fst (randomR (mi, ma) g)
-
-randIndex :: ColumnIndex -> SDRRange -> BitIndex
-randIndex cI cR =  getRandomIndexBetween cI (minIndex cR) (maxIndex cR)
-
-singleFeedForwardSynapse :: BitIndex -> Config -> (BitIndex, ConnectionStrength)
-singleFeedForwardSynapse index config = (index, initConnectionStrength config) -- TODO set initConnectionStrength defined by a kernel function.
-
-
-{-
-
-  UPDATE
-
--}
-
-
-{-
-  SpatialPooler
--}
+{--------------------------------------------------------------
+                           SpatialPooler
+---------------------------------------------------------------}
 
 -- TODO applie a spacialPooler on a region
-spacialPooler :: Config -> SDR -> Region -> Region
---spacialPooler c i r = updatePermanence . updateBoost $ activateColumns c i r
-spacialPooler c i r = activateColumns c i r
+spacialPooler :: HTMConfig -> SDR -> Region -> Region
+--spacialPooler = updatePermanence . updateBoost . activateColumns
+spacialPooler = activateColumns
 
 -- initialize
     -- first map input to region -- DONE
@@ -276,8 +62,10 @@ spacialPooler c i r = activateColumns c i r
     -- update permenance values of each Sensory
 
 
-activateColumns :: Config -> SDR -> Region -> Region
-activateColumns config sdr region = region { currentStep = updateOverlap config sdr (currentStep region)}
+activateColumns :: HTMConfig -> SDR -> Region -> Region
+activateColumns conH sdr region = region { 
+  currentStep = (learn conH sdr) . (updateInhibition conH) $ updateOverlap conH sdr (currentStep region)
+  }
 --activateColumns config sdr region = region { currentStep = learn . (updateInhibition config) $ updateOverlap config sdr (currentStep region)}
 -- for each column -> compute overlap & boost it by the boost factor
 -- for each column -> activate columns if the column is not inhibited
@@ -288,65 +76,110 @@ activateColumns config sdr region = region { currentStep = updateOverlap config 
   -- update inhibition radius
 
 
--- Overlap
-updateOverlap :: Config -> SDR -> [Column] -> [Column]
-updateOverlap config sdr columns = map (computeOverlap config sdr) columns
 
-computeOverlap :: Config -> SDR -> Column -> Column
-computeOverlap config sdr column = let overlap = countOverlap config sdr (inputField column) in
-  if overlap >= (overlapThreshold config) then
-    column{overlap = floor $ fromIntegral(overlap) * (boost column)}
+--    COMPUTE OVERLAP
+-----------------------
+
+
+-- |Updates the overlap score of all columns
+updateOverlap :: HTMConfig -> SDR -> [Column] -> [Column]
+updateOverlap conH sdr columns = map (computeOverlap conH sdr) columns
+
+-- |Updates the overlap score of a column
+computeOverlap :: HTMConfig -> SDR -> Column -> Column
+computeOverlap conH sdr column = let overlap = countOverlap conH sdr (inputField column) in
+  if overlap >= (overlapThreshold conH) 
+  then column{overlap = floor $ fromIntegral(overlap) * (boost column)}
   else column{overlap = 0 }
 
 
-countOverlap :: Config -> SDR -> [FeedForwardSynapse] -> Int
+-- |Counts the how many synapses in the inputfield of a column are active 
+countOverlap :: HTMConfig -> SDR -> [FeedForwardSynapse] -> Int
 countOverlap config sdr = sum . map (choose config sdr) 
 
--- |The `choose` function chooses if a column is active or not based on
--- the connection strength and activation threshold
-choose :: Config -> SDR -> FeedForwardSynapse -> Int
-choose config sdr (bitIndex, connectionStrength)
-  | connectionStrength >= (pConthresh config) = if elem bitIndex sdr then 1 else 0
+-- |Chooses if a column is active or not based on
+-- the connection strength to the input space and activation threshold
+choose :: HTMConfig -> SDR -> FeedForwardSynapse -> Int
+choose config sdr syn 
+  | conStr syn >= (pConthresh config) = if elem (ind syn) sdr then 1 else 0
   | otherwise = 0
 
 
+--    Inhibition
+-----------------------
 
---Inhibition
-updateInhibition :: Config -> [Column] -> [Column]
-updateInhibition config columns = [maybeActivateColumn config (col,ind) columns | (col,ind) <- zip columns [1..] ]
+-- | Inhibit columns that do not 
+updateInhibition :: HTMConfig -> [Column] -> [Column]
+updateInhibition config columns = map (maybeActivateColumn config columns) $ (zip columns [1..])
 
-maybeActivateColumn :: Config -> (Column,Int) -> [Column] -> Column
-maybeActivateColumn config (col,ind) cols =
+-- |A Column is activated if the it is one the k columns with the  highest activaiton function.
+maybeActivateColumn :: HTMConfig -> [Column] -> (Column,Int) -> Column
+maybeActivateColumn config cols (col,ind)=
   (maybeActivate col) . (kmaxOverlap (colActLev config)) $ neighbors (inhibRad col) ind cols
 
+-- |Returns the neighbors of column within a radius. The radius is clipped if the column is at the edge of the region. -- TODO perhaps use a rotational way?
 neighbors :: Int -> Int -> [Column] -> [Column]
 neighbors inhibRad colIndex cols = drop (colIndex - (inhibRad `div` 2)) . take (inhibRad) $ cols --TODO double check
 
+-- |Returns k columns with the highest overlapscore from a list of columns.
 kmaxOverlap :: Int -> [Column] -> [Column]
 kmaxOverlap k cols = take k $ sortOn overlap cols -- TODO double check
 
+-- |Activate a column if it is in a list of columns, else Inactivate it.
 maybeActivate :: Column -> [Column] -> Column
-maybeActivate col cols
-  | col `elem` cols = col{columnState = ActiveColumn}
-  | otherwise = col{columnState = InactiveColumn}
+maybeActivate col cols = 
+  if col `elem` cols 
+    then col{columnState = ActiveColumn} 
+    else col{columnState = InactiveColumn}
 
 
--- learn
-learn :: [Column] -> [Column]
-learn col = col -- TODO
+--    LEARN
+-----------------------
+
+-- |Update the connection strength of synapses within a region
+learn :: HTMConfig -> SDR -> [Column] -> [Column]
+learn conH sdr cols = map ((updateBoost conH cols) . (learnCol conH sdr)) cols -- TODO might be a problem if the connection strength of currentStep and prevStep are different! Maybe separate the synapses from the columns
+
+learnCol :: HTMConfig -> SDR -> Column -> Column
+learnCol conH sdr col = 
+  if (columnState col) == ActiveColumn 
+    then col{inputField = map (activateSynapse conH sdr) (inputField col)}
+    else col
+
+activateSynapse :: HTMConfig -> SDR ->  FeedForwardSynapse -> FeedForwardSynapse
+activateSynapse conH sdr syn =  
+  if elem (ind syn) sdr  -- if this synpase is active.
+    then syn {conStr = min 1 ((conStr syn) + (proxSynConInc conH))} 
+    else syn {conStr = max 0 ((conStr syn) - (proxSynConDec conH))}
 
 
 
 updatePermanence :: Region -> Region
 updatePermanence r = r -- TODO
 
-updateBoost :: Region -> Region
-updateBoost r = r -- TODO
+updateBoost :: HTMConfig -> [Column] -> Column -> Column
+updateBoost conH cols col = (updateBoostFactor conH) $ (checkAvgOverlap conH) $ col
 
+checkAvgOverlap :: HTMConfig -> Column -> Column
+checkAvgOverlap conH col = 
+  if averagePercent (odc col) < mop conH 
+    then col{
+      inputField = map (\x -> x{
+        conStr = min 1 (conStr x + 0.1*pConthresh conH)
+        }) (inputField col)
+      }
+    else col
 
-{-
-  Temporal pooler
--}
+updateBoostFactor :: HTMConfig -> Column -> Column
+updateBoostFactor conH col = col{overlap = round (boostFactor * fromIntegral (overlap col))}
+  where 
+    boostFactor = exp (- (boostStrength conH) * (shift - center))
+    shift = average $ adc col
+    center  = (targetDensity conH) * (fromIntegral $ _window $ adc col)
+
+{--------------------------------------------------------------
+                           Temporal Pooler
+---------------------------------------------------------------}
 
 
 -- TODO applie a spacialPooler on a region
@@ -365,45 +198,54 @@ temporalPooler m = m
 -- Add a function that creates a segment
 -- Implement spacial pooler
 -- Implement temporal pooler
+-- TODO perhaps use a rotational way?
 
 
-
-{-
-
-  VIEW
-
--}
+-- -------------------------------------------------------------
+--                           VIEW
+-- -------------------------------------------------------------
 
 main = do
   let sdrConfig = initSDRConfig
-  let config = initConfig sdrConfig
-  let region = initRegion config
+  let regionConfig = initRegionConfig
+  let htmConfig = initHTMConfig
+  -- let config = initConfig sdrConfig
+  let region = initRegion sdrConfig regionConfig
   let encodedSDR = encode 50 sdrConfig
   print encodedSDR
   print region
-  let region2 = spacialPooler config encodedSDR region
+  let region2 = spacialPooler htmConfig encodedSDR region
   print region2
 
 -- main = print <$> spacialPooler <*> (encode 12 sdrConfig) <*> (initRegion initConfig initSDRConfig)
-
-initConfig :: SDRConfig -> Config
-initConfig sdrConfig = Config{
-   nrOfColumns              = 100
-   , nrOfCellsPerColumn     = 1
-   , maxNrOfInputBits       = 2 -- The nr of synapses from the inputregion to a column
-   , nrOfSynapsesPerCell    = 1
-   , mappingType            = Random
-   , initConnectionStrength = 1.0 -- on the synapses between cells in a region, should be a kernel function
-   , sdrRange               = SDRRange {minIndex  = 0, maxIndex = totNrBits sdrConfig}
-   , overlapThreshold = 0
-   , pConthresh = 0.7
-   , colActLev = 2
-}
 
 initSDRConfig :: SDRConfig
 initSDRConfig = SDRConfig{
   minVal          = 0
   , maxVal        = 100
   , buckets       = 50
-  , bitsPerBucket = 50
+  , bitsPerBucket = 20
+  , sdrRange = SDRRange {minIndex  = 0, maxIndex = sum [50{- bucket -}, 20{- bitsPerBucket -}] - 1}
+}
+
+initRegionConfig = RegionConfig{
+  nrOfColumns = 100
+  , nrOfCellsPerColumn = 1
+  , maxNrOfInputBits = 2
+  , nrOfSynapsesPerSegment = 1
+  , mappingType = Random
+  , initConnectionStrength = 1.0
+  , mvWindow = 3
+}
+
+
+initHTMConfig = HTMConfig{
+  overlapThreshold = 0
+  , pConthresh = 0.7
+  , colActLev = 2
+  , proxSynConInc = 0.2
+  , proxSynConDec = 0.2
+  , mop = 0.2
+  , targetDensity = 0.3
+  , boostStrength = 0.3
 }
