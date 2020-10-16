@@ -9,15 +9,18 @@ type Bit = Bool
 data MovingAverage = MovingAverage {
     _bits      :: [Bit] -- ^The list of on and of bits
     , _window  :: Int -- ^The window size of the moving average
-    } deriving (Show)
+    }
+
+instance Show MovingAverage where
+    show = show . _bits 
 
 makeLenses ''MovingAverage
 
 append :: Bit -> MovingAverage -> MovingAverage
-append bit mva =  mva & bits %~ (move bit (mva^.window))
+append bit mva =  mva & bits %~ move bit (mva^.window)
 
 move :: Bit -> Int -> [Bit] -> [Bit] 
-move bit max bits = if length bits >= max then init (bit:bits) else (bit:bits)
+move bit max bits = if length bits >= max then init (bit:bits) else bit:bits
 
 mapBoolInt :: Bool -> Int
 mapBoolInt True = 1
@@ -38,4 +41,4 @@ off :: MovingAverage -> MovingAverage
 off = append False
 
 averagePercent :: MovingAverage -> Float
-averagePercent mva = (average mva) / (fromIntegral (mva^.window))
+averagePercent mva = average mva / fromIntegral (mva^.window)

@@ -55,9 +55,15 @@ data FeedForwardSynapse = FeedForwardSynapse{
 
 -- |A cell has input dendrites and a cell state.
 data Cell = Cell {
-  dendrites   :: [Dendrite] -- ^A set of dendrites. 
+  id_ :: ID -- ^A unique Id representing the cell within a region 
+  , dendrites :: [Dendrite] -- ^A set of dendrites. 
   , cellState :: CellState -- ^The state of this cell.
 } deriving (Eq)
+
+data ID = ID{
+  col_ :: ColumnIndex -- ^The column 
+  , cell_ :: CellIndex
+} deriving(Eq)
 
 -- |The two states a column can exist in.
 data ColumnState = ActiveColumn | InactiveColumn deriving (Eq)
@@ -89,11 +95,14 @@ instance Show Region where
   show = show . currentStep 
 
 instance Eq Column where
-  c1 == c2 = (inputField c1) == (inputField c2)
+  c1 == c2 = inputField c1 == inputField c2
 
 instance Show Column where
-  --show  = show . overlap 
-  show column = intercalate "" $ map show $ cells column
+  --show = show . overlap 
+  --show column = intercalate "" $ map show $ cells column
+  show = show . columnState
+  --show = show . inputField
+  --show = show . adc 
 
 instance Show Cell where
   show = show . cellState 
@@ -107,114 +116,139 @@ instance Show CellState where
   show InactiveCell = "0"
   show PredictiveCell = "p"
 
+instance Show FeedForwardSynapse where
+  show = show . conStr
+
 
 -- -------------------------------------------------------------
 --                           INITILIZE
 -- -------------------------------------------------------------
 
 -- | Initilize a region
-initRegion :: SDRConfig -> RegionConfig -> Region
-initRegion conS conR =
-  let regions = replicate 2 $ initAllDendrites conR $ initColumns conS conR in -- make a copy of region
-    Region {
+initRegion :: SDRConfig -> RegionConfig -> IO Region
+initRegion conS conR = do
+  region <- initAllDendrites conR $ initColumns conS conR
+  let regions = replicate 2 region -- make a copy of region
+  return Region {
     currentStep = head regions
     , previousStep = head . tail $ regions
     }
 
+
 -- | Initilize all columns in a region
-initColumns :: SDRConfig -> RegionConfig -> [Column]
-initColumns conS conR = map (initsingleColumn conS conR) $ [0..nrOfColumns conR]
+initColumns :: SDRConfig -> RegionConfig -> IO [Column]
+initColumns conS conR = mapM (initsingleColumn conS conR) [0..nrOfColumns conR]
 
 -- | Initilize a column
-initsingleColumn :: SDRConfig -> RegionConfig -> Int -> Column
-initsingleColumn  conS conR columnIndex = Column {
-  cells = initCells conR
-  , inputField = initFeedForwardSynapses conS conR columnIndex
-  , odc = MovingAverage {_bits = [], _window = (mvWindow conR)} -- TODO the average rate of activation
-  , adc = MovingAverage {_bits = [], _window = (mvWindow conR)}
-  , columnState = InactiveColumn
-  , boost       = 1 -- should maybe be Float
-  , overlap     = 0
-  , inhibRad    = 0
-}
+initsingleColumn :: SDRConfig -> RegionConfig -> Int -> IO Column
+initsingleColumn  conS conR columnIndex = do 
+    fs <- initFeedForwardSynapses conS conR
+    let c = Column {
+    cells = initCells conR columnIndex
+    , inputField = fs
+    , odc = MovingAverage {_bits = [], _window = mvWindow conR} -- TODO the average rate of activation
+    , adc = MovingAverage {_bits = [], _window = mvWindow conR}
+    , columnState = InactiveColumn
+    , boost       = 1 -- should maybe be Float
+    , overlap     = 0
+    , inhibRad    = 2 -- how to select!
+    }
+    return c
 
 -- | Initilize all cells in a columns
-initCells :: RegionConfig -> [Cell]
-initCells conR = [singleCell | _ <- [0..(nrOfCellsPerColumn conR)]]
+initCells :: RegionConfig -> Int -> [Cell]
+initCells conR colIndex = [singleCell colIndex cellIndex | cellIndex <- [0..(nrOfCellsPerColumn conR)]]
 
 -- | Initilize a cell
-singleCell :: Cell
-singleCell = Cell {
-  dendrites = [] -- The dendrites are initilized after all cells are initilized.
+singleCell :: Int -> Int -> Cell
+singleCell colIndex cellIndex = Cell {
+  id_ = ID{col_ = colIndex, cell_ = cellIndex}
+  , dendrites = [] -- The dendrites are initilized after all cells are initilized.
   , cellState = InactiveCell
 }
 
 
 -- | Initilize a list of Dendrite for all columns
-initAllDendrites :: RegionConfig -> [Column] -> [Column]
-initAllDendrites conR columns = map (initDendritesPerColumn conR columns) columns
+initAllDendrites :: RegionConfig -> IO [Column] -> IO [Column]
+initAllDendrites conR columns = do 
+  cols <- columns
+  mapM (initDendritesPerColumn conR cols) cols
 
 -- |Initilize a list of Dendrite for a column
-initDendritesPerColumn ::  RegionConfig -> [Column] -> Column -> Column
-initDendritesPerColumn conR columns column = column {
-  cells = map (initDendritesPerCell conR columns) (cells column)
-}
+initDendritesPerColumn ::  RegionConfig -> [Column] -> Column -> IO Column
+initDendritesPerColumn conR columns column = do
+  cells <- mapM (initDendritesPerCell conR columns) (cells column)
+  return column {
+  cells = cells 
+  }
 
 -- |Initilize a list of dendrites for a each cell
-initDendritesPerCell :: RegionConfig -> [Column] -> Cell -> Cell
-initDendritesPerCell conR columns cell = cell {
-  dendrites = initDendrites conR cell columns
+initDendritesPerCell :: RegionConfig -> [Column] -> Cell -> IO Cell
+initDendritesPerCell conR columns cell = do
+  initDend <- initDendrites conR cell columns
+  return cell {
+  dendrites = initDend
 }
 
 
 
 -- |Initilize a list of dendrites
-initDendrites :: RegionConfig -> Cell -> [Column] -> [Dendrite]
-initDendrites conR cell columns = [[[initSynapse conR cell columns | _ <- [1.. (nrOfSynapsesPerSegment conR)] ]]]--[initDendrite conS conR cell columns]
+initDendrites :: RegionConfig -> Cell -> [Column] -> IO [Dendrite]
+initDendrites conR cell columns = do 
+  segm <- mapM (initSynapse conR cell columns) [1..(nrOfSynapsesPerSegment conR)]
+  return [[segm]]-- nrOfSynapsesPerSegment synapses in one segment in one dendrite
 
-initSynapse :: RegionConfig -> Cell -> [Column] -> Synapse
-initSynapse conR cell columns = Synapse {
+
+initSynapse :: RegionConfig -> Cell -> [Column] -> Int -> IO Synapse
+initSynapse conR cell columns _ = do
+  destCell <- getRandomCell conR cell columns
+  let syn = Synapse {
   source = cell
-  , destination = getRandomCell conR cell columns
+  , destination = destCell
   , connectionStrength = initConnectionStrength conR
-}
+  }
+  return syn
 
 -- TODO fix this, it is ugly!
-getRandomCell :: RegionConfig -> Cell -> [Column] -> Cell
-getRandomCell conR notCell columns = if randCell == notCell 
+getRandomCell :: RegionConfig -> Cell -> [Column] -> IO Cell
+getRandomCell conR notCell columns = do 
+  randColumnIndex <- getRandomIndexBetween 1 (nrOfColumns conR)
+  randCellIndex <- getRandomIndexBetween 1 (nrOfCellsPerColumn conR)
+  let randCell = cells (columns !! randColumnIndex) !! randCellIndex
+  if randCell == notCell -- the cell is always the same at the beginning. Needs indexing
     then getRandomCell conR notCell columns 
-    else randCell
-    where 
-    randColumnIndex = getRandomIndexBetween 0 1 (nrOfColumns conR) -- todo need a random seed
-    randCellIndex = getRandomIndexBetween 0 1 (nrOfCellsPerColumn conR)-- todo need a random seed
-    randCell = (cells (columns !! randColumnIndex)) !! randCellIndex
-
+    else return randCell
 
 
 -- |init mapping between sdr indecies and Columns in the region
-initFeedForwardSynapses :: SDRConfig -> RegionConfig -> ColumnIndex ->  [FeedForwardSynapse]
-initFeedForwardSynapses conS conR c = map (singleFeedForwardSynapse conR) $ selectRandomIndecies conS conR c -- FIXME this is a list of the synapses 
+initFeedForwardSynapses :: SDRConfig -> RegionConfig ->  IO [FeedForwardSynapse]
+initFeedForwardSynapses conS conR = mapM (singleFeedForwardSynapse conR) $ selectRandomIndecies conS conR -- FIXME this is a list of the synapses 
 
-selectRandomIndecies :: SDRConfig -> RegionConfig -> ColumnIndex ->  [BitIndex]
-selectRandomIndecies  conS conR cI = randIndecies (maxNrOfInputBits conR) cI (sdrRange conS)
+selectRandomIndecies :: SDRConfig -> RegionConfig ->  [IO BitIndex]
+selectRandomIndecies  conS conR = randIndecies (maxNrOfInputBits conR) (sdrRange conS)
 
-randIndecies :: Int -> ColumnIndex -> SDRRange -> [BitIndex]
-randIndecies n cI sR
+randIndecies :: Int -> SDRRange -> [IO BitIndex]
+randIndecies n sR
   | n <= 0 = []
-  | n > 0 = randIndex cI sR : randIndecies (n-1) cI sR -- TODO double check that no duplicates occure
+  | n > 0 = randIndex sR : randIndecies (n-1) sR -- TODO double check that no duplicates occure
 
-getRandomIndexBetween :: Int -> Int -> Int -> BitIndex
-getRandomIndexBetween seed mi ma = let g = mkStdGen seed in
-                                      fst (randomR (mi, ma) g)
 
-randIndex :: ColumnIndex -> SDRRange -> BitIndex
-randIndex cI cR =  getRandomIndexBetween cI (minIndex cR) (maxIndex cR)
+randIndex :: SDRRange -> IO BitIndex
+randIndex cR =  getRandomIndexBetween (minIndex cR) (maxIndex cR)
 
-singleFeedForwardSynapse :: RegionConfig -> BitIndex -> FeedForwardSynapse
-singleFeedForwardSynapse config index  = FeedForwardSynapse{
-    ind = index, 
-    conStr = (initConnectionStrength config)
-    } -- TODO set initConnectionStrength defined by a kernel function.
+getRandomIndexBetween :: Int -> Int -> IO BitIndex
+getRandomIndexBetween mi ma = do
+  getStdRandom $ randomR (mi,ma) -- returns an IO BitIndex
+
+singleFeedForwardSynapse :: RegionConfig -> IO BitIndex -> IO FeedForwardSynapse
+singleFeedForwardSynapse config index  = do 
+  indexVal <- index
+  let f = FeedForwardSynapse{
+    ind = indexVal, 
+    conStr = initConnectionStrength config
+    } 
+  return f
+     -- TODO set initConnectionStrength defined by a kernel function.
 
 
 -- TODO double check that no duplicates occure
