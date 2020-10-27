@@ -9,4 +9,9 @@
 
 # Question: 
 - How is the sense of time encoded into the htm?
+- Is it possible to generate a region that is created deterministicaly, that also maintains the distribution? This would make the creation of a region a pure function.
+- Can a cell be activated by mulitple segments?
+
+Notes:
+- The region had to be an IO, because of the random number generator in haskell.
 

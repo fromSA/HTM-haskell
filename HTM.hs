@@ -15,12 +15,11 @@ module HTM (
   -- * Some functions
   spacialPooler, temporalPooler) where
 
-import           Data.List     (intercalate, sortOn)
 import           System.Random
 import           MovingAverage 
 import           SDR           (SDR, SDRConfig(..), SDRRange(..), encode, totNrBits)
 import           Region
-
+import           Data.List.Extra (intercalate, sortOn, sumOn')
 -- -------------------------------------------------------------
 --                           CONFIG
 -- -------------------------------------------------------------
@@ -35,6 +34,11 @@ data HTMConfig = HTMConfig{
   , mop :: Float -- ^The minimum percent of active bits in inputField expected to have a overlap with.
   , boostStrength :: Float -- ^The strength of boost value between about 0
   , targetDensity :: Float -- ^The desired percent of active duty cycle within the sliding window.
+  , connectedPermenance :: Float -- ^The threshold of permenant synaptic connection. If a synapse has higher connection than this threshold and is connected to an active cell, then it is considered active. 
+  , activationThreshold :: Int -- ^The number of synapses per segment that must be active for the segment to be considered active. should be less than nrOfSynapsesPerSegment of RegionConfig
+  , predictedDecrement :: Float 
+  , permanenceDecrement :: Float -- ^The forgetting strength, detrmines how fast a pattern is forgotten by the region.
+  , permanenceIncrement :: Float -- ^The learning strength, determines how fast a pattern is learned by the region
 }
 
 
@@ -49,7 +53,6 @@ data HTMConfig = HTMConfig{
 
 
 spacialPooler :: HTMConfig -> SDR -> Region -> Region
---spacialPooler = updatePermanence . updateBoost . activateColumns
 spacialPooler conH sdr region = region { 
   --currentStep = learn conH sdr . updateInhibition conH $ updateOverlap conH sdr (currentStep region)
   currentStep = learn conH sdr . updateInhibition conH $ updateOverlap conH sdr (currentStep region)
@@ -180,12 +183,158 @@ updateBoostFactor conH col = col{overlap =  round (boostFactor * fromIntegral (o
                            Temporal Pooler
 ---------------------------------------------------------------}
 
+--TODO to maintain fixed sparcity, we must grow synapses to active cells in prev
 
 -- TODO applie a spacialPooler on a region
-temporalPooler :: Region -> Region
-temporalPooler m = m
+temporalPooler :: HTMConfig -> Region -> Region
+temporalPooler conH = predict conH . addContext conH
+
+--------------------------------------------------------------
+--                           Add Context
+---------------------------------------------------------------
+
+addContext :: HTMConfig -> Region -> Region
+addContext conH r = r{
+  currentStep = activateColumns conH (previousStep r) $ zip (currentStep r) (previousStep r) 
+}
+
+activateColumns :: HTMConfig ->  [Column] -> [(Column,Column)] -> [Column]
+activateColumns conH prev = map (activateColumn conH prev)
+
+activateColumn :: HTMConfig -> [Column] -> (Column, Column) -> Column -- TODO clean up, you are passing in prev twice
+activateColumn conH prev (c,p) 
+  | columnState c == ActiveColumn = c {cells = activateCells conH prev $ cells p}
+  | columnState c == InactiveColumn =  punishPredictedCells conH p
+
+activateCells :: HTMConfig -> [Column] -> [Cell] -> [Cell]
+activateCells conH prev cells = 
+  if containsPredictiveCell cells 
+    then activatePredictedCells cells -- just the predicted cells
+    else burst conH prev cells -- all cells
+
+containsPredictiveCell :: [Cell] -> Bool
+containsPredictiveCell [] = False
+containsPredictiveCell (x:xs)
+  | cellState x == PredictiveCell = True
+  | cellState x == ActivePredictiveCell = True
+  | otherwise = containsPredictiveCell xs 
+
+activatePredictedCells :: [Cell] -> [Cell]
+activatePredictedCells (x:xs) = 
+  if cellState x == PredictiveCell  -- Also learn on active segments.
+    then x{cellState = ActiveCell}: activatePredictedCells xs
+    else x: activatePredictedCells xs
+
+burst :: HTMConfig -> [Column] -> [Cell] -> [Cell]
+burst conH prev = map (\x-> x{
+  dendrites = learnDendrites conH prev $ dendrites x -- TODO also grow new synapses on bestmatching segment or least used segment.
+  , cellState = ActiveCell
+  }) 
+
+learnDendrites :: HTMConfig -> [Column] -> [Dendrite] -> [Dendrite]
+learnDendrites conH prev = map (learnSegmentes conH prev)
+
+learnSegmentes :: HTMConfig -> [Column] -> [Segment] -> [Segment]
+learnSegmentes conH prev = map (learnSynapses conH prev)
+
+
+learnSynapses :: HTMConfig -> [Column] -> Segment -> Segment
+learnSynapses conH prev seg = 
+  if segmentState seg == ActiveSegment 
+    then seg{synapses = map (learnSynapse conH prev) $ synapses seg}
+    else seg 
+
+learnSynapse :: HTMConfig -> [Column] -> Synapse -> Synapse
+learnSynapse conH prev syn = syn{
+  connectionStrength = 
+    if cellState preCell == ActiveCell || cellState preCell == ActivePredictiveCell  -- if this synpase is connected to an active cell.
+      then connectionStrength syn + permanenceIncrement conH
+      else connectionStrength syn - permanenceDecrement conH
+} where 
+  preColumn = prev !! col_ id
+  preCell = cells preColumn !! cell_ id
+  id = destination syn
+  
+punishPredictedCells :: HTMConfig -> Column -> Column
+punishPredictedCells conH col = col{
+    cells = punishCells conH $ cells col
+  }
+
+punishCells :: HTMConfig -> [Cell] -> [Cell]
+punishCells conH = map $ punishCell conH
+  
+punishCell :: HTMConfig -> Cell -> Cell
+punishCell conH cell = 
+  if cellState cell == PredictiveCell
+    then cell{dendrites = punishDendrites $ dendrites cell}
+    else cell
+
+punishDendrites :: [Dendrite] -> [Dendrite]
+punishDendrites r = r -- TODO
+-- predictedDecrement conH
+
+--------------------------------------------------------------
+--                           Predict
+---------------------------------------------------------------
+
+predict :: HTMConfig -> Region -> Region
+predict conH r = r{
+  currentStep = map (predictColumn conH (previousStep r)) (currentStep r)
+}
+
+predictColumn :: HTMConfig -> [Column] -> Column -> Column
+predictColumn conH prev col = col{
+  cells = map (maybePredict conH prev) $ cells col 
+}
+-- TODO also add the segment state and segment activation size (nr of active synapses).
+maybePredict :: HTMConfig -> [Column] -> Cell -> Cell
+maybePredict conH prev cell = cell{
+  cellState = if predicted && cellState cell == ActiveCell then ActivePredictiveCell else PredictiveCell
+  } 
+  where 
+    predicted = isPredicted conH prev cell
+
+isPredicted :: HTMConfig -> [Column] -> Cell -> Bool
+isPredicted conH prev c = dendriteIsPredicted conH prev $ dendrites c
+
+dendriteIsPredicted :: HTMConfig -> [Column]-> [Dendrite] -> Bool
+dendriteIsPredicted _ _ [] = False 
+dendriteIsPredicted conH prev (x:xs) = segmentIsPredicted conH prev x || dendriteIsPredicted conH prev xs
+
+segmentIsPredicted :: HTMConfig -> [Column] -> [Segment] -> Bool
+segmentIsPredicted _ _ [] = False
+segmentIsPredicted conH prev (x:xs) = synapceIsPredicted conH prev x || segmentIsPredicted conH prev xs
+
+synapceIsPredicted :: HTMConfig -> [Column] -> Segment -> Bool
+synapceIsPredicted conH prev seg = sumOn' (boolToInt . synapseIsActive conH prev ) (synapses seg) > activationThreshold conH
+
+boolToInt :: Bool -> Int
+boolToInt b = if b then 1 else 0
+
+synapseIsActive :: HTMConfig -> [Column] -> Synapse  -> Bool
+synapseIsActive conH prev syn  = 
+  connectionStrength syn > connectedPermenance conH 
+  && cellState cell  == ActiveCell
+  where 
+    column = prev !! col_ id
+    cell = cells column !! cell_ id
+    id = destination syn
+
+
+--TODO
+-- punish predicted cells, 
+-- add a step value in cell ID
+-- change the step for the current value.
+-- add the pointer of the step value of ID when initCells.
+-- grow synapses when learning
+-- switch the steps at each step.
+-- See if there an abstraction that does not need a duplicaiton of the a whole region for each step
+-- use the ActivePredictiveCell state of a cell in learning
+-- avoid code duplicate
+
+
 -- Represent input within the previous context
-  -- For each active column -> activate predictive cells | activate all cells
+  -- For each active column -> activate predictive cells | activate all cells (burst, if no cell is predictive)
 -- Predict next state
   -- For cells with n nr of Active Dentrite -> Predict state
   -- Update PermenanceValue between
@@ -195,9 +344,8 @@ temporalPooler m = m
 -- TODO
 -- Clean up and improve Code
 -- Add a function that creates a segment
--- Implement spacial pooler
 -- Implement temporal pooler
--- TODO perhaps use a rotational way?
+-- TODO perhaps use a rotational representation?
 
 
 -- -------------------------------------------------------------
@@ -235,7 +383,7 @@ initRegionConfig = RegionConfig{
   nrOfColumns = 100
   , nrOfCellsPerColumn = 1
   , maxNrOfInputBits = 3
-  , nrOfSynapsesPerSegment = 2
+  , nrOfSynapsesPerSegment = 4
   , mappingType = Random
   , initConnectionStrength = 1.0
   , mvWindow = 3
@@ -251,4 +399,9 @@ initHTMConfig = HTMConfig{
   , mop = 0.2
   , targetDensity = 0.3
   , boostStrength = 0.3
+  , connectedPermenance = 0.5
+  , activationThreshold = 2 
+  , predictedDecrement = 0.1
+  , permanenceIncrement = 0.1
+  , permanenceDecrement = 0.1
 }

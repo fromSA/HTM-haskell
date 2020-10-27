@@ -11,13 +11,13 @@ import SDR(BitIndex(..), SDRRange(..), SDRConfig(..))
 
 -- |The configuration parameters for a Region.
 data RegionConfig = RegionConfig{
-  nrOfColumns              :: Int -- ^ The number of columns in the region.
-  , nrOfCellsPerColumn     :: Int -- ^ The number of cells per column in the region. It is the same for all cells.
-  , maxNrOfInputBits       :: Int -- ^ The maximum number of input bits in the inputfield connected to a Column.
-  , nrOfSynapsesPerSegment :: Int -- ^ The number of initial synapses per segment.
-  , mappingType            :: MappingType -- ^ The mapping type between an input sdr and region columns
-  , initConnectionStrength :: Float -- ^ The connection strength of synapses between cells in a region.
-  , mvWindow :: Int -- ^The size of the window of the moving average, used in overlap and active duty cycle.
+  _nrOfColumns              :: Int -- ^ The number of columns in the region.
+  , _nrOfCellsPerColumn     :: Int -- ^ The number of cells per column in the region. It is the same for all cells.
+  , _maxNrOfInputBits       :: Int -- ^ The maximum number of input bits in the inputfield connected to a Column.
+  , _nrOfSynapsesPerSegment :: Int -- ^ The number of initial synapses per segment.
+  , _mappingType            :: MappingType -- ^ The mapping type between an input sdr and region columns -- TODO delete
+  , _initConnectionStrength :: Float -- ^ The connection strength of synapses between cells in a region.
+  , _mvWindow :: Int -- ^The size of the window of the moving average, used in overlap and active duty cycle.
 }
 
 
@@ -31,13 +31,14 @@ data MappingType = Random
 -- |A region is a set of columns, The HTM algorithm needs to look at previously active cells to predict the next active cells. 
 -- Therefore a region is represented with to versions of each columns, the current and previous time step of the region.
 data Region = Region {
-  currentStep  :: [Column], -- ^The columns in the current time step, use by the temporal algorithm of the HTM algorithm.
-  previousStep :: [Column] -- ^The columns in the previous time step, used by the temporal algorithm of the HTM algorthm.
+  _currentStep  :: [Column], -- ^The columns in the current time step, use by the temporal algorithm of the HTM algorithm.
+  _previousStep :: [Column] -- ^The columns in the previous time step, used by the temporal algorithm of the HTM algorthm.
 }
 
 
 data Column = Column {
-  cells         :: [Cell] -- ^The cells in a column. When a column is active, one or more of these cell will represent that state. These cells get the same input, i.e. the input to the column they belong to.
+  columnId_ :: ColumnIndex -- The index of the column.
+  , cells         :: [Cell] -- ^The cells in a column. When a column is active, one or more of these cell will represent that state. These cells get the same input, i.e. the input to the column they belong to.
   , inputField  :: [FeedForwardSynapse] -- ^The bit indecies this columns is connected to in the SDR.
   , columnState :: ColumnState -- ^The state of this column. 
   , boost       :: Float -- ^TODO should maybe be Float, should be at least 1. If a column has small moving activation average, it is boosted within the inhibition algorithm. This enforces sparcity.
@@ -55,12 +56,12 @@ data FeedForwardSynapse = FeedForwardSynapse{
 
 -- |A cell has input dendrites and a cell state.
 data Cell = Cell {
-  id_ :: ID -- ^A unique Id representing the cell within a region 
+  cellId_ :: CellID -- ^A unique Id representing the cell within a region 
   , dendrites :: [Dendrite] -- ^A set of dendrites. 
   , cellState :: CellState -- ^The state of this cell.
 } deriving (Eq)
 
-data ID = ID{
+data CellID = CellID{
   col_ :: ColumnIndex -- ^The column 
   , cell_ :: CellIndex
 } deriving(Eq)
@@ -68,31 +69,34 @@ data ID = ID{
 -- |The two states a column can exist in.
 data ColumnState = ActiveColumn | InactiveColumn deriving (Eq)
 -- |The three states a cell can exist in.
-data CellState = ActiveCell | InactiveCell | PredictiveCell deriving (Eq)
+data CellState = ActiveCell | InactiveCell | PredictiveCell | ActivePredictiveCell deriving (Eq)
 
+data SegmentState = ActiveSegment | InactiveSegment deriving(Eq)
 -- |A collection of segments.
-type Dendrite = [Segment]
--- |A collection of synapses.
-type Segment = [Synapse]
+type Dendrite = [Segment] -- These dendrites can come from other regions
 
+-- |A collection of synapses.
+data Segment = Segment{
+  segmentState :: SegmentState -- ^ df
+  , synapses :: [Synapse] -- These segmenst together define a dendrite. Each segment has is expected to encode atleast one pattern to recognise.
+} deriving(Eq)
 -- |A synapse is the connection between two cells. A synapse is part of a group of synapses called segment. 
 -- Each segment is attached to a dendrite.
 data Synapse = Synapse {
   source               :: Cell -- ^where the input is coming from
-  , destination        :: Cell -- ^where the input is going too
+  , destination        :: CellID -- ^where the input is going too.
   , connectionStrength :: ConnectionStrength -- ^i.e. the connection strength between the source and destination
 } deriving (Eq)
 
 type ConnectionStrength = Float -- ^Between 0 and 1
 type ColumnIndex = Int -- ^unsigned int
 type CellIndex = Int -- ^unsigned int
-
 -- -------------------------------------------------------------
 --                           VIEW
 -- -------------------------------------------------------------
 
 instance Show Region where
-  show = show . currentStep 
+  show = show . _currentStep 
 
 instance Eq Column where
   c1 == c2 = inputField c1 == inputField c2
@@ -100,9 +104,10 @@ instance Eq Column where
 instance Show Column where
   --show = show . overlap 
   --show column = intercalate "" $ map show $ cells column
-  show = show . columnState
+  --show = show . columnState
   --show = show . inputField
   --show = show . adc 
+  show = show . cells
 
 instance Show Cell where
   show = show . cellState 
@@ -130,24 +135,25 @@ initRegion conS conR = do
   region <- initAllDendrites conR $ initColumns conS conR
   let regions = replicate 2 region -- make a copy of region
   return Region {
-    currentStep = head regions
-    , previousStep = head . tail $ regions
+    _currentStep = head regions
+    , _previousStep = head . tail $ regions
     }
 
 
 -- | Initilize all columns in a region
 initColumns :: SDRConfig -> RegionConfig -> IO [Column]
-initColumns conS conR = mapM (initsingleColumn conS conR) [0..nrOfColumns conR]
+initColumns conS conR = mapM (initsingleColumn conS conR) [0.._nrOfColumns conR]
 
 -- | Initilize a column
 initsingleColumn :: SDRConfig -> RegionConfig -> Int -> IO Column
 initsingleColumn  conS conR columnIndex = do 
     fs <- initFeedForwardSynapses conS conR
     let c = Column {
-    cells = initCells conR columnIndex
+      columnId_ = columnIndex
+    , cells = initCells conR columnIndex
     , inputField = fs
-    , odc = MovingAverage {_bits = [], _window = mvWindow conR} -- TODO the average rate of activation
-    , adc = MovingAverage {_bits = [], _window = mvWindow conR}
+    , odc = MovingAverage {_bits = [], _window = _mvWindow conR} -- TODO the average rate of activation
+    , adc = MovingAverage {_bits = [], _window = _mvWindow conR}
     , columnState = InactiveColumn
     , boost       = 1 -- should maybe be Float
     , overlap     = 0
@@ -157,12 +163,12 @@ initsingleColumn  conS conR columnIndex = do
 
 -- | Initilize all cells in a columns
 initCells :: RegionConfig -> Int -> [Cell]
-initCells conR colIndex = [singleCell colIndex cellIndex | cellIndex <- [0..(nrOfCellsPerColumn conR)]]
+initCells conR colIndex = [singleCell colIndex cellIndex | cellIndex <- [0..(_nrOfCellsPerColumn conR)]]
 
 -- | Initilize a cell
 singleCell :: Int -> Int -> Cell
 singleCell colIndex cellIndex = Cell {
-  id_ = ID{col_ = colIndex, cell_ = cellIndex}
+  cellId_ = CellID{col_ = colIndex, cell_ = cellIndex}
   , dendrites = [] -- The dendrites are initilized after all cells are initilized.
   , cellState = InactiveCell
 }
@@ -195,25 +201,30 @@ initDendritesPerCell conR columns cell = do
 -- |Initilize a list of dendrites
 initDendrites :: RegionConfig -> Cell -> [Column] -> IO [Dendrite]
 initDendrites conR cell columns = do 
-  segm <- mapM (initSynapse conR cell columns) [1..(nrOfSynapsesPerSegment conR)]
-  return [[segm]]-- nrOfSynapsesPerSegment synapses in one segment in one dendrite
+
+  syns <- mapM (initSynapse conR cell columns) [1..(_nrOfSynapsesPerSegment conR)]
+  let segm = Segment{
+    segmentState = InactiveSegment
+    , synapses = syns
+  }
+  return [[segm]]-- _nrOfSynapsesPerSegment synapses in one segment in one dendrite
 
 
-initSynapse :: RegionConfig -> Cell -> [Column] -> Int -> IO Synapse
+initSynapse :: RegionConfig -> Cell -> [Column] -> Int -> IO Synapse -- TODO create synapse connection to the _previousStep from the CurrentStep
 initSynapse conR cell columns _ = do
   destCell <- getRandomCell conR cell columns
   let syn = Synapse {
   source = cell
-  , destination = destCell
-  , connectionStrength = initConnectionStrength conR
+  , destination = cellId_ destCell
+  , connectionStrength = _initConnectionStrength conR
   }
   return syn
 
 -- TODO fix this, it is ugly!
 getRandomCell :: RegionConfig -> Cell -> [Column] -> IO Cell
 getRandomCell conR notCell columns = do 
-  randColumnIndex <- getRandomIndexBetween 1 (nrOfColumns conR)
-  randCellIndex <- getRandomIndexBetween 1 (nrOfCellsPerColumn conR)
+  randColumnIndex <- getRandomIndexBetween 1 (_nrOfColumns conR)
+  randCellIndex <- getRandomIndexBetween 1 (_nrOfCellsPerColumn conR)
   let randCell = cells (columns !! randColumnIndex) !! randCellIndex
   if randCell == notCell -- the cell is always the same at the beginning. Needs indexing
     then getRandomCell conR notCell columns 
@@ -225,7 +236,7 @@ initFeedForwardSynapses :: SDRConfig -> RegionConfig ->  IO [FeedForwardSynapse]
 initFeedForwardSynapses conS conR = mapM (singleFeedForwardSynapse conR) $ selectRandomIndecies conS conR -- FIXME this is a list of the synapses 
 
 selectRandomIndecies :: SDRConfig -> RegionConfig ->  [IO BitIndex]
-selectRandomIndecies  conS conR = randIndecies (maxNrOfInputBits conR) (sdrRange conS)
+selectRandomIndecies  conS conR = randIndecies (_maxNrOfInputBits conR) (sdrRange conS)
 
 randIndecies :: Int -> SDRRange -> [IO BitIndex]
 randIndecies n sR
@@ -245,7 +256,7 @@ singleFeedForwardSynapse config index  = do
   indexVal <- index
   let f = FeedForwardSynapse{
     ind = indexVal, 
-    conStr = initConnectionStrength config
+    conStr = _initConnectionStrength config
     } 
   return f
      -- TODO set initConnectionStrength defined by a kernel function.

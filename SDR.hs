@@ -46,4 +46,4 @@ encode n config = let start = getStartOf n config in
 
 -- |Get the encoding start position of a value in the SDR.
 getStartOf :: Int -> SDRConfig -> Int
-getStartOf n config = floor $  realToFrac ((buckets config) * (n - (minVal config))) / (realToFrac ((maxVal config) - (minVal config)))
+getStartOf n config = floor $  realToFrac (buckets config * (n - minVal config)) / realToFrac (maxVal config - minVal config)
