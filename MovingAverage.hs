@@ -30,7 +30,7 @@ average :: MovingAverage -> Float
 average mv = fromIntegral (sumBits (mv^.bits)) / fromIntegral (length (mv^.bits))
 
 sumBits :: [Bit] -> Int
-sumBits =  foldr ((+).mapBoolInt) 0
+sumBits =  foldr ((+) . mapBoolInt) 0
 
 -- |Appends an on bit to the movingaverage
 on :: MovingAverage -> MovingAverage
