@@ -12,6 +12,7 @@
 - Is it possible to generate a region that is created deterministicaly, that also maintains the distribution? This would make the creation of a region a pure function.
 - Can a cell be activated by mulitple segments?
 
-Notes:
+# Notes:
 - The region had to be an IO, because of the random number generator in haskell.
-
+- OBS! Let vs where might cause a segnificant delay in processing time.
+- Don't know which dendrite to select during buring when growing segments on the least used cell. I just select the first dendrite, assuming there is one. There should be one for all cells when the region initialises.

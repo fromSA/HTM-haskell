@@ -486,12 +486,11 @@ switch r = r{_currentStep = r^.previousStep, _previousStep = r^.currentStep}
 
 
 --TODO
--- switch the steps at each step.
-
 -- add a step value in cell ID (Why?)
 -- change the step for the current value.
 -- add the pointer of the step value of ID when initCells.
 -- See if there is an abstraction that does not need a duplicaiton of the a whole region for each step
+  -- The dendrites are the same for currentStep and previous step.
 -- use the ActivePredictiveCell state of a cell in learning
 -- avoid code duplicate
 
