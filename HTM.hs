@@ -1,4 +1,5 @@
   {-# LANGUAGE TemplateHaskell #-}
+  {-# LANGUAGE TupleSections  #-}
 {-|
 Module      : HTM
 Description : Short description
@@ -21,31 +22,45 @@ import           SDR           (SDR, SDRConfig(..), SDRRange(..), encode, totNrB
 import           Region
 import           Data.List.Extra (intercalate, sortOn, sumOn')
 import Control.Lens
+import Control.Monad
+
 -- -------------------------------------------------------------
 --                           CONFIG
 -- -------------------------------------------------------------
 
 -- |The configuration parameters for the HTM algorithm.
 data HTMConfig = HTMConfig{
-  _overlapThreshold         :: Int -- ^ The threshold for column activation. If the number of active bits in the inputfield of a column >= this threshold, then the column becomes active.
-  , _pConthresh             :: Float -- ^ A synapse with connection strength >= this threshold is considered permenantly connected.
+{-duplciate-} _overlapThreshold         :: Int -- ^ The threshold for column activation. If the number of active bits in the inputfield of a column >= this threshold, then the column becomes active.
+{-duplciate-}  , _mop :: Float -- ^The minimum percent of active bits in inputField expected to have a overlap with.
   , _colActLev              :: Int -- ^ The desired column activity level within inhibition radius i.e. the number of columns in that should be activated within a activaiton radius.
   , _proxSynConInc :: Float -- ^The amount to decrease the connection strength of a synapses with for proximal synapses 
   , _proxSynConDec :: Float -- ^The amount to decrease the connection strength of a synapses with for proximal synapses 
-  , _mop :: Float -- ^The minimum percent of active bits in inputField expected to have a overlap with.
+{-duplciate-}  , _pConthresh             :: Float -- ^ A synapse with connection strength >= this threshold is considered permenantly connected.
+  
   , _boostStrength :: Float -- ^The strength of boost value between about 0
   , _targetDensity :: Float -- ^The desired percent of active duty cycle within the sliding window.
-  , _connectedPermenance :: Float -- ^The threshold of permenant synaptic connection. If a synapse has higher connection than this threshold and is connected to an active cell, then it is considered active. 
-  , _activationThreshold :: Int -- ^The number of synapses per segment that must be active for the segment to be considered active. should be less than nrOfSynapsesPerSegment of RegionConfig
   , _predictedDecrement :: Float 
   , _permanenceDecrement :: Float -- ^The forgetting strength, detrmines how fast a pattern is forgotten by the region.
   , _permanenceIncrement :: Float -- ^The learning strength, determines how fast a pattern is learned by the region
-  , _matchingThreshold :: Int -- ^The threshold for when a cell is considered matching, i.e. when a segment has this many activeconnections to the previously active/winner cells.
+  
+{-duplciate-}  , _connectedPermenance :: Float -- ^The threshold of permenant synaptic connection. If a synapse has higher connection than this threshold and is connected to an active cell, then it is considered active. 
+  , _learningThreshold :: Int -- ^The threshold for when a cell is considered matching, i.e. when a segment has this many activeconnections to the previously active/winner cells.
+  , _activationThreshold :: Int -- ^The number of synapses per segment that must be active for the segment to be considered active. should be less than nrOfSynapsesPerSegment of RegionConfig
   , _learningEnabled :: Bool -- ^True if the temporalPooler should update the connectionstrengths of the synapses.
 
 }
 
+-- How to avoid passing conH sdr to each individual function? Create a tuple?
+data Package = Package{
+  _conH :: HTMConfig,
+  _conR :: RegionConfig,
+  _conS :: SDRConfig,
+  _sdr :: SDR
+}
+
 makeLenses ''HTMConfig
+makeLenses ''Package
+
 
 -- -------------------------------------------------------------
 --                           UPDATE
@@ -57,77 +72,51 @@ makeLenses ''HTMConfig
 ---------------------------------------------------------------}
 
 
-spacialPooler :: HTMConfig -> SDR -> Region -> Region
-spacialPooler conH sdr region = region & currentStep %~ (learn conH sdr . updateInhibition conH . updateOverlap conH sdr)
-  
+spacialPooler :: Package -> Region ->  Region
+spacialPooler p r =  r & currentStep %~ (learn p . updateInhibition p . updateOverlap p)
 
--- initialize
-    -- first map input to region -- DONE
--- phase1 : overlap
-    -- activate columns based on their input field
--- phase2 : Inhibition
-    -- boost the column (to maintain a fixed sparcity)
--- phase 3 : learning
-    -- update permenance values of each Sensory
-
-
---activateColumns config sdr region = region { currentStep = learn . (updateInhibition config) $ updateOverlap config sdr (currentStep region)}
--- for each column -> compute overlap & boost it by the boost factor
--- for each column -> activate columns if the column is not inhibited
--- Learning: for each active column -> update permanence
--- UpdateBoosting: for each columns ->
-  -- update boosting/
-  -- update active duty & overlap cycle
-  -- update inhibition radius
-
-
-
---    COMPUTE OVERLAP
------------------------
-
+---------------------
+-- COMPUTE OVERLAP --
+---------------------
 
 -- |Updates the overlap score of all columns
-updateOverlap :: HTMConfig -> SDR -> [Column] -> [Column]
-updateOverlap conH sdr = map (computeOverlap conH sdr)
+updateOverlap :: Package -> [Column] -> [Column]
+updateOverlap p = map (computeOverlap p)
+
 
 -- |Updates the overlap score of a column
-computeOverlap :: HTMConfig -> SDR -> Column -> Column
-computeOverlap conH sdr column =
-  if overlap >= conH^.overlapThreshold
-    then column{_overlap = floor $ fromIntegral overlap  *  column^.boost, _odc = on (column^.odc)}
-    else column{_overlap = 0 , _odc = off ( column^.odc)}
+computeOverlap :: Package -> Column -> Column
+computeOverlap p c = if overlapScore >= p^. conH .overlapThreshold
+    then c & overlap .~ floor (fromIntegral overlapScore  *  c^.boost)
+      & odc %~ on
+    else c & overlap .~ 0 
+      & odc %~ off
   where
-    overlap = countOverlap conH sdr (column^.inputField)
-
-
--- |Counts the how many synapses in the inputfield of a column are active 
-countOverlap :: HTMConfig -> SDR -> [FeedForwardSynapse] -> Int
-countOverlap config sdr = sum . map (choose config sdr) 
+    -- Counts the how many synapses in the inputfield of a column are active 
+    overlapScore = sum $ map (choose p) (c^.inputField)
 
 -- |Chooses if a column is active or not based on
 -- the connection strength to the input space and activation threshold
-choose :: HTMConfig -> SDR -> FeedForwardSynapse -> Int
-choose config sdr syn = 
-  if syn^.conStr >= config^.pConthresh && syn^.ind `elem` sdr 
-    then 1 
-    else 0
+choose :: Package -> FeedForwardSynapse -> Int
+choose p syn = fromEnum $ syn^.conStr >= p^. conH . pConthresh && syn^.ind `elem` p^.sdr 
 
-
---    Inhibition
------------------------
+---------------------
+--   Inhibition    --
+---------------------
 
 -- | Inhibit columns that do not have an overlap score among the k highest
-updateInhibition :: HTMConfig -> [Column] -> [Column]
-updateInhibition config columns = zipWith (curry (maybeActivateColumn config columns)) columns [1..]
+updateInhibition :: Package -> [Column] -> [Column]
+updateInhibition p columns = map (maybeActivateColumn p columns) columns
 
 -- |A Column is activated if the it is one the k columns with the  highest activaiton function.
-maybeActivateColumn :: HTMConfig -> [Column] -> (Column,Int) -> Column
-maybeActivateColumn conH cols (col,ind)=
-  maybeActivate col . kmaxOverlap (conH^.colActLev) $ neighbors (col^.inhibRad) ind cols
+maybeActivateColumn :: Package -> [Column] -> Column -> Column
+maybeActivateColumn p cols col=
+  maybeActivate col . kmaxOverlap (p^.conH .colActLev) $ neighbors col cols
+
 
 -- |Returns the neighbors of column within a radius. The radius is clipped if the column is at the edge of the region. -- TODO perhaps use a rotational way?
-neighbors :: Int -> Int -> [Column] -> [Column]
-neighbors inhibRad colIndex = take inhibRad . drop (colIndex - (inhibRad `div` 2)) --TODO double check
+neighbors :: Column -> [Column] -> [Column]
+neighbors col = take (col^.inhibRad) . drop ((col^.columnId) - ((col^.inhibRad) `div` 2)) --TODO double check
 
 -- |Returns k columns with the highest overlapscore from a list of columns.
 kmaxOverlap :: Int -> [Column] -> [Column]
@@ -135,78 +124,64 @@ kmaxOverlap k cols = take k $ sortOn _overlap cols -- TODO double check
 
 -- |Activate a column if it is in a list of columns, else Inactivate it.
 maybeActivate :: Column -> [Column] -> Column
-maybeActivate col cols = 
-  if col `elem` cols 
-    then col & columnState .~ ActiveColumn & adc %~ on 
-    else col & columnState .~ InActiveColumn & adc %~ off
+maybeActivate col cols 
+  | col `elem` cols = col & columnState .~ ActiveColumn & adc %~ on 
+  | otherwise =  col & columnState .~ InActiveColumn & adc %~ off
 
+---------------------
+--      LEARN      --
+---------------------
 
---    LEARN
------------------------
 
 -- |Update the connection strength of synapses within a region
-learn :: HTMConfig -> SDR -> [Column] -> [Column]
-learn conH sdr cols = map (updateBoost conH cols . learnCol conH sdr) cols -- TODO might be a problem if the connection strength of currentStep and prevStep are different! Maybe separate the synapses from the columns
+learn :: Package-> [Column] -> [Column]
+learn p = map (updateBoost p . learnCol p) -- TODO might be a problem if the connection strength of currentStep and prevStep are different! Maybe separate the synapses from the columns
 
-learnCol :: HTMConfig -> SDR -> Column -> Column
-learnCol conH sdr col = 
-  if _columnState col == ActiveColumn 
-    then col & inputField %~ map (activateSynapse conH sdr)
-    else col
+learnCol :: Package -> Column -> Column
+learnCol p col 
+  | col^.columnState == ActiveColumn = col & inputField %~ map (activateSynapse p)
+  | otherwise =  col
 
-activateSynapse :: HTMConfig -> SDR ->  FeedForwardSynapse -> FeedForwardSynapse
-activateSynapse conH sdr syn =  
-  if _ind syn `elem` sdr  -- if this synpase is active.
-    then syn & conStr %~ min 1 . (+  conH^.proxSynConInc)
-    else syn & conStr %~ max 0 . subtract ( conH^.proxSynConDec)
-
+activateSynapse :: Package -> FeedForwardSynapse -> FeedForwardSynapse
+activateSynapse p syn =  
+  if syn^.ind `elem` p^.sdr  -- if this synpase is active.
+    then syn & conStr %~ min 1 . (+  p^.conH.proxSynConInc)
+    else syn & conStr %~ max 0 . subtract ( p^.conH.proxSynConDec)
 
 
 updatePermanence :: Region -> Region
 updatePermanence r = r -- TODO
 
-updateBoost :: HTMConfig -> [Column] -> Column -> Column
-updateBoost conH cols = updateBoostFactor conH . checkAvgOverlap conH
+updateBoost :: Package -> Column -> Column
+updateBoost p = updateBoostFactor p . checkAvgOverlap p
 
-checkAvgOverlap :: HTMConfig -> Column -> Column
-checkAvgOverlap conH col = 
-  if averagePercent (col^.odc) < _mop conH 
-    then col & (inputField . traverse . conStr) %~ (min 1 . (+ 0.1 {- arbitrary value, should be a parameter.-} *  conH^.pConthresh))
+checkAvgOverlap :: Package -> Column -> Column
+checkAvgOverlap p col = 
+  if averagePercent (col^.odc) < (p^.conH . mop)
+    then col & (inputField . traverse . conStr) %~ (min 1 . (+ 0.1 {- arbitrary value, should be a parameter.-} *  p^.conH.pConthresh))
     else col
 
-updateBoostFactor :: HTMConfig -> Column -> Column
-updateBoostFactor conH col = col & overlap %~ round . (boostFactor *) . fromIntegral
+updateBoostFactor :: Package -> Column -> Column
+updateBoostFactor p col = col & overlap %~ round . (boostFactor *) . fromIntegral
   where 
-    boostFactor = exp $ - conH^.boostStrength * (shift - center)
+    boostFactor = exp $ - p^.conH.boostStrength * (shift - center)
     shift = average $  col^.adc
-    center  =  conH^.targetDensity * fromIntegral (col^. (adc . window))
-
+    center  =  p^.conH.targetDensity * fromIntegral (col^. (adc . window))
 
 
 {--------------------------------------------------------------
                            Temporal Pooler
 ---------------------------------------------------------------}
 
---TODO to maintain fixed sparcity, we must grow synapses to active cells in prev
 
 -- TODO applie a spacialPooler on a region
 temporalPooler :: HTMConfig -> RegionConfig -> Region -> IO Region
-temporalPooler conH conR r =  (addContext conH conR . computeMatchingStrength conH) r <&> switch . predict conH
+temporalPooler conH conR r = addContext conH conR r <&> switch . predict conH 
 
+---------------------
+--   ADD CONTEXT   --
+---------------------
 
----------------------------------------------------------------
---                  Compute Matching Strength
----------------------------------------------------------------
-computeMatchingStrength :: HTMConfig -> Region -> Region
-computeMatchingStrength conH r = r & currentStep . traverse . cells . traverse . dendrites . traverse . traverse %~ setMatchingStrength conH (r^.previousStep)
-
-setMatchingStrength :: HTMConfig -> [Column] -> Segment -> Segment
-setMatchingStrength conH prev seg = seg & matchingStrength .~ sumOn' (boolToInt . synapseIsActive conH prev ) (seg^.synapses)
-
-
----------------------------------------------------------------
---                          Add Context
----------------------------------------------------------------
 
 addContext :: HTMConfig -> RegionConfig -> Region -> IO Region
 addContext conH conR r = do 
@@ -279,7 +254,7 @@ burst conH conR prev cells = do
   -- Find the winnnerCells
   let prevWinnerCells = collectCells (^.isWinner) prev
 
-  if m >= (conH^.matchingThreshold) 
+  if m >= (conH^.learningThreshold) 
     -- grow synapses on the bestmatchingsegment
     then do
       let newWinnerCell = currentCells !! c
@@ -421,7 +396,7 @@ punishPredictedCell conH prev cell =
     else cell
 
 punishSegment :: HTMConfig -> [Column] -> Segment -> Segment
-punishSegment conH prev seg = if seg^.matchingStrength >= conH^.matchingThreshold
+punishSegment conH prev seg = if seg^.matchingStrength >= conH^.learningThreshold
   then seg & synapses . traverse %~ punishSynapse conH prev
   else seg
 
@@ -433,19 +408,45 @@ punishSynapse conH prev syn = if ActiveCell == getCell (syn^.destination) prev ^
 
 --------------------------------------------------------------
 --                           Predict
----------------------------------------------------------------
+--------------------------------------------------------------
+
+
 
 predict :: HTMConfig -> Region -> Region
-predict conH r = r{
+predict conH r = updateAllSegments (updateSegmentState conH . computeMatchingStrength conH (r^.previousStep) . removeDeadSynapses) r{
   _currentStep = map (predictColumn conH (r^.previousStep)) (r^.currentStep)
 }
+
+updateAllSegments ::  (Segment -> Segment) -> Region ->  Region
+updateAllSegments f r = r & currentStep . traverse . cells . traverse . dendrites . traverse . traverse %~ f
+
+-------------------------------
+-- Compute Matching Strength --
+-------------------------------
+computeMatchingStrength :: HTMConfig -> [Column] -> Segment -> Segment
+computeMatchingStrength conH prev seg = seg & matchingStrength .~ sumOn' (boolToInt . synapseIsActive conH prev ) (seg^.synapses)
+
+-------------------------------
+--   Remove dead synapses    --
+-------------------------------
+removeDeadSynapses :: Segment -> Segment
+removeDeadSynapses seg = seg & synapses %~ filter (\syn -> syn^.connectionStrength>0)
+
+-------------------------------
+--      Activate Segment     --
+-------------------------------
+updateSegmentState :: HTMConfig -> Segment -> Segment
+updateSegmentState conH seg 
+  | seg^.matchingStrength > conH^.activationThreshold =  seg & segmentState .~ ActiveSegment
+  | seg^.matchingStrength > conH^.learningThreshold = seg & segmentState .~ MatchingSegment
+  | otherwise = seg & segmentState .~ InActiveSegment
 
 predictColumn :: HTMConfig -> [Column] -> Column -> Column
 predictColumn conH prev col = col{
   _cells = map (maybePredict conH prev) $ col^.cells
 }
 
--- TODO also add the segment state and segment activation size (nr of active synapses).
+-- TODO also add the segment state and segment activation size (nr of active synapses), I.E. matchingStrength.
 maybePredict :: HTMConfig -> [Column] -> Cell -> Cell
 maybePredict conH prev cell = 
   cell & cellState %~ (\x -> if predicted &&  x == ActiveCell then ActivePredictiveCell else PredictiveCell)
@@ -486,6 +487,11 @@ switch r = r{_currentStep = r^.previousStep, _previousStep = r^.currentStep}
 
 
 --TODO
+-- Problem, always passing HTMConfig, RegionConfig through all functions, need a better way.
+  -- The configs
+  -- The Random Generator
+  -- A debugger, printing
+--TODO to maintain fixed sparcity, we must grow synapses to active cells in prev
 -- add a step value in cell ID (Why?)
 -- change the step for the current value.
 -- add the pointer of the step value of ID when initCells.
@@ -509,3 +515,30 @@ switch r = r{_currentStep = r^.previousStep, _previousStep = r^.currentStep}
 -- Implement temporal pooler
 -- TODO perhaps use a rotational representation?
 
+
+
+--- Spatial pooler
+
+-- initialize
+    -- first map input to region -- DONE
+-- phase1 : overlap
+    -- activate columns based on their input field
+-- phase2 : Inhibition
+    -- boost the column (to maintain a fixed sparcity)
+-- phase 3 : learning
+    -- update permenance values of each Sensory
+
+
+--activateColumns config sdr region = region { currentStep = learn . (updateInhibition config) $ updateOverlap config sdr (currentStep region)}
+-- for each column -> compute overlap & boost it by the boost factor
+-- for each column -> activate columns if the column is not inhibited
+-- Learning: for each active column -> update permanence
+-- UpdateBoosting: for each columns ->
+  -- update boosting/
+  -- update active duty & overlap cycle
+  -- update inhibition radius
+
+
+
+  --------------------------------------------------------------------------------
+  

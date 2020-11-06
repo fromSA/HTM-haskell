@@ -73,7 +73,7 @@ data ColumnState = ActiveColumn | InActiveColumn deriving (Eq)
 -- |The three states a cell can exist in.
 data CellState = ActiveCell | InActiveCell | PredictiveCell | ActivePredictiveCell deriving (Eq)
 
-data SegmentState = ActiveSegment | InActiveSegment deriving(Eq)
+data SegmentState = ActiveSegment | InActiveSegment | MatchingSegment deriving(Eq)
 -- |A collection of segments.
 type Dendrite = [Segment] -- These dendrites can come from other regions
 

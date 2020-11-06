@@ -26,6 +26,7 @@ main = do
   let regionConfig = initRegionConfig
   let htmConfig = initHTMConfig
 
+  let package = initPackage htmConfig regionConfig sdrConfig
   -- Initialisation
   region <- initRegion sdrConfig regionConfig
 
@@ -33,19 +34,29 @@ main = do
   let seqData = [50,20,25,20]
 
   -- Learning/Predicting, i.e. spacial and temporal poolers
-  compute seqData htmConfig regionConfig sdrConfig region
+  compute seqData package region
+
+  
 
 -- main = print <$> spacialPooler <*> (encode 12 sdrConfig) <*> (initRegion initConfig initSDRConfig)
 
-compute :: [Int] -> HTMConfig -> RegionConfig -> SDRConfig -> Region -> IO ()
-compute [] _ _ _ region = print region
-compute (x:xs) conH conR conS region = do
-  print region
-  let encodedSDR = encode x conS
-  let regionSpat = spacialPooler conH  encodedSDR region
-  regionTemp <- temporalPooler conH conR regionSpat
-  compute xs conH conR conS regionTemp
 
+compute :: [Int] -> Package -> Region -> IO ()
+compute [] p region = print region
+compute (x:xs) p region = do
+  print region
+  let encodedSDR = encode x (_conS p)
+  let regionSpat =  spacialPooler p{_sdr = encodedSDR} region
+  --regionTemp <- temporalPooler (_conH p) (_conR p) regionSpat -- There is an eternal loop here
+  compute xs p regionSpat
+
+initPackage :: HTMConfig -> RegionConfig -> SDRConfig -> Package
+initPackage h r s = Package{
+  _conH = h, 
+  _conR = r, 
+  _conS = s, 
+  _sdr = []
+}
 
 initSDRConfig :: SDRConfig
 initSDRConfig = SDRConfig{
@@ -82,7 +93,7 @@ initHTMConfig = HTMConfig{
   , _predictedDecrement = 0.1
   , _permanenceIncrement = 0.1
   , _permanenceDecrement = 0.1
-  , _matchingThreshold = 2
+  , _learningThreshold = 2
   , _learningEnabled = True
 }
 

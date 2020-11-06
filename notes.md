@@ -11,6 +11,7 @@
 - How is the sense of time encoded into the htm?
 - Is it possible to generate a region that is created deterministicaly, that also maintains the distribution? This would make the creation of a region a pure function.
 - Can a cell be activated by mulitple segments?
+- punishing synapses: Eventually as we grow synpases, cell might end up connecting to all othercells. Should we prune dead synapses, and when should we prune? I.e. Should there be a fixed size of "potential synapses" for all segments at all times?
 
 # Notes:
 - The region had to be an IO, because of the random number generator in haskell.
