@@ -240,14 +240,13 @@ instance Show Column where
 
 instance Show Cell where
   show = show . _cellState
-
--- show cell = (show (fromEnum $ _isWinner cell)) ++  (show (_dendrites cell))
---show = show . fromEnum . _isWinner
---show = show . _dendrites
+  -- show cell = (show (fromEnum $ _isWinner cell)) ++  (show (_dendrites cell))
+  --show = show . fromEnum . _isWinner
+  --show = show . _dendrites
 
 instance Show Segment where
   --show = show . _segmentState
-  show = show . _synapses
+  show = show . length . _synapses
 
 instance Show Synapse where
   show = show . _destination

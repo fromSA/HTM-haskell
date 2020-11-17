@@ -214,6 +214,7 @@ learnCol p col
   | col ^. columnState == ActiveColumn = col & inputField %~ map (activateSynapse p)
   | otherwise = col
 
+-- | Activate a synapse if is connected to and active SDR bit.
 activateSynapse :: Package -> FeedForwardSynapse -> FeedForwardSynapse
 activateSynapse p syn =
   if synapseIsActive
@@ -222,8 +223,10 @@ activateSynapse p syn =
   where
     synapseIsActive = syn ^. ind `elem` p ^. sdr
 
+-- | update the boostfactor of a column based of the overlap and active moving average.
 updateBoost p = updateBoostFactor p . checkAvgOverlap p
 
+-- | update the connectionstrength of the proximal synapses for a column based on its moving average overlap score.
 checkAvgOverlap p col =
   if averagePercent (col ^. odc) < (p ^. conH . spatialConfig . mop)
     then col & (inputField . traverse . conStr) %~ (min 1 . (+ 0.1 {- arbitrary value, should be a parameter.-} * p ^. conH . spatialConfig . pConthresh))
@@ -285,7 +288,11 @@ activatePredictedCells p pwc prev = mapM (activatePredictedCell p pwc prev)
 activatePredictedCell :: Package -> [Cell] -> [Column] -> Cell -> IO Cell
 activatePredictedCell p pwc prev cell
   | cell ^. cellState == PredictiveCell || cell ^. cellState == ActivePredictiveCell = do
-    ndend <- maintainSparcityPerDendrite p pwc cell $ learnActiveSegments p prev (cell ^. dendrites)
+    let learned =
+          if p ^. conH . temporalConfig . learningEnabled
+            then learnActiveSegments p prev (cell ^. dendrites)
+            else cell ^. dendrites
+    ndend <- maintainSparcityPerDendrite p pwc cell learned
     return cell {_isWinner = True, _cellState = ActiveCell, _dendrites = ndend}
   | otherwise = return cell {_isWinner = False, _cellState = InActiveCell}
 
@@ -313,45 +320,47 @@ burst p pwc prev cells = do
   -- Find the bestMatchingSegment
   let (cellInd, (dendInd, (segInd, matchVal))) = findBestMatching p prev currentCells
   let [c, d, s] = map naturalToInt [cellInd, dendInd, segInd]
-  -- Find the winnnerCellsmain
 
+  -- Find the winnnerCells
   if matchVal >= (p ^. conH . temporalConfig . learningThreshold)
-    then -- grow synapses on the bestmatchingsegment
-    do
-      let newWinnerCell = currentCells !! c
-      let bestMacthingSeg = (newWinnerCell ^. dendrites) !! d !! s
-      -- Find winnercells from the previous iteration that are not connected to this winnercells
+    then updateBestMatchingSegment p pwc c d s currentCells
+    else updateLeastUsedCell p pwc currentCells
 
-      newSynapses <- maintainSparcity p newWinnerCell pwc bestMacthingSeg
+updateBestMatchingSegment :: Package -> [Cell] -> Int -> Int -> Int -> [Cell] -> IO [Cell]
+updateBestMatchingSegment p pwc c d s cells = do
+  -- grow synapses on the bestmatchingsegment
+  let winnerCell = cells !! c
+  let bestMacthingSeg = (winnerCell ^. dendrites) !! d !! s
+  -- Find winnercells from the previous iteration that are not connected to this winnercells
+  newSynapses <- maintainSparcity p winnerCell pwc bestMacthingSeg
 
-      -- Append the new synapses to bestMatchingSegment
-      let newWinnerCell1 = newWinnerCell & dendrites . element d . element s . synapses %~ (++ newSynapses)
-      let newWinnerCell2 = newWinnerCell1 & dendrites . element d . element s . matchingStrength +~ intToNatural (length newSynapses)
-      -- Mark winnerCell as the winner.
-      let newWinnerCell3 = newWinnerCell2 & isWinner .~ True
+  -- Append the new synapses to bestMatchingSegment
+  let winnerCell1 = winnerCell & dendrites . element d . element s . synapses %~ (++ newSynapses)
+  let winnerCell2 = winnerCell1 & dendrites . element d . element s . matchingStrength +~ intToNatural (length newSynapses)
 
-      return $ currentCells & element c .~ newWinnerCell3
-    else -- grow synapses on a new segment on the least used Cell
-    do
-      -- Find the least used cell
-      let lc = naturalToInt $ leastUsedCell currentCells
-      -- Add a new segment on the least used cell
-      let newWinnerCell = currentCells !! lc
+  -- Mark winnerCell as the winner.
+  return $ cells & element c .~ (winnerCell2 & isWinner .~ True)
 
-      let newSegment = growSegment
-      newSynapses <- maintainSparcity p newWinnerCell pwc newSegment
-      let newSegment2 =
-            newSegment
-              & synapses .~ newSynapses
-              & matchingStrength .~ intToNatural (length newSynapses)
+updateLeastUsedCell :: Package -> [Cell] -> [Cell] -> IO [Cell]
+updateLeastUsedCell p pwc cells = do
+  -- grow synapses on a new segment on the least used Cell
+  -- Find the least used cell
+  let lc = naturalToInt $ leastUsedCell cells
 
-      -- Add a segment with these new synapses to the winnerCell. Prepends a new segment to the first dendrite in this cell.
-      let newWinnerCell1 = newWinnerCell & dendrites %~ \xs -> (newSegment2 : head xs) : tail xs
+  let newWinnerCell = cells !! lc
 
-      -- Mark winnerCell as the winner.
-      let newWinnerCell2 = newWinnerCell1 & isWinner .~ True
+  let newSegment = growSegment
+  newSynapses <- maintainSparcity p newWinnerCell pwc newSegment
 
-      return $ currentCells & element lc .~ newWinnerCell2
+  let newSegment2 =
+        newSegment
+          & synapses .~ newSynapses
+          & matchingStrength .~ intToNatural (length newSynapses)
+  -- Add a new segment on the least used cell
+  -- Add a segment with these new synapses to the winnerCell. Prepends a new segment to the first dendrite in this cell.
+  let winnerCell1 = newWinnerCell & dendrites %~ \xs -> (newSegment2 : head xs) : tail xs
+  -- Mark winnerCell as the winner.
+  return $ cells & element lc .~ (winnerCell1 & isWinner .~ True)
 
 maintainSparcity :: Package -> Cell -> [Cell] -> Segment -> IO [Synapse]
 maintainSparcity p cell pwc seg = do
@@ -394,20 +403,6 @@ collectCells f (x : xs) = l ++ ls
   where
     l = filter f (x ^. cells)
     ls = collectCells f xs
-
----
-
-connectedTo :: Cell -> Cell -> Bool
-connectedTo from to = foldl (foldDend from) False (to ^. dendrites)
-
-foldDend :: Cell -> Bool -> Dendrite -> Bool
-foldDend cell = foldl (foldSeg cell)
-
-foldSeg :: Cell -> Bool -> Segment -> Bool
-foldSeg cell b seg = foldl (checkConnection cell) b (seg ^. synapses)
-
-checkConnection :: Cell -> Bool -> Synapse -> Bool
-checkConnection cell b syn = b || (syn ^. destination) == (cell ^. cellId)
 
 --- find the best matching segment
 findBestMatching :: Package -> [Column] -> [Cell] -> (CellIndex, (DendriteIndex, (SegmentIndex, Natural)))
@@ -496,11 +491,17 @@ punishSynapse p prev syn =
 
 predict :: Package -> Region -> Region
 predict p r =
-  (\x -> x & currentStep %~ map (predictColumn p (r ^. previousStep))) $
-    updateAllSegments (updateSegmentState p . computeMatchingStrength p (r ^. previousStep)) r -- . removeDeadSynapses)
+  (\x -> x & currentStep %~ map (predictCells p)) $
+    updateAllSegments (updateSegmentState p . computeMatchingStrength p (r ^. previousStep) . removeDeadSynapses) r
 
 updateAllSegments :: (Segment -> Segment) -> Region -> Region
 updateAllSegments f r = r & currentStep . traverse . cells . traverse . dendrites . traverse . traverse %~ f
+
+-------------------------------
+--   Remove dead synapses    --
+-------------------------------
+removeDeadSynapses :: Segment -> Segment
+removeDeadSynapses seg = seg & synapses %~ filter (\syn -> syn ^. connectionStrength > 0)
 
 -------------------------------
 -- Compute Matching Strength --
@@ -514,18 +515,14 @@ synapseIsActive p prev syn =
     && ActiveCell == getCell (syn ^. destination) prev ^. cellState
 
 -------------------------------
---   Remove dead synapses    --
--------------------------------
-removeDeadSynapses :: Segment -> Segment
-removeDeadSynapses seg = seg & synapses %~ filter (\syn -> syn ^. connectionStrength >= 0)
-
--------------------------------
 --      Activate Segment     --
 -------------------------------
 updateSegmentState :: Package -> Segment -> Segment
 updateSegmentState p seg
-  | seg ^. matchingStrength > p ^. conH . temporalConfig . activationThreshold = seg & segmentState .~ ActiveSegment
-  | seg ^. matchingStrength > p ^. conH . temporalConfig . learningThreshold = seg & segmentState .~ MatchingSegment
+  | seg ^. matchingStrength >= p ^. conH . temporalConfig . learningThreshold
+      && seg ^. matchingStrength < p ^. conH . temporalConfig . activationThreshold =
+    seg & segmentState .~ MatchingSegment
+  | seg ^. matchingStrength >= p ^. conH . temporalConfig . activationThreshold = seg & segmentState .~ ActiveSegment
   | otherwise = seg & segmentState .~ InActiveSegment
 
 -------------------------------
@@ -535,30 +532,30 @@ updateSegmentState p seg
 -- | If a column is predicted to be active in the next time step,
 --  update the state to ActivePredicted, if it is already active.
 --  Otherwise, update the state to Predicted.
-predictColumn :: Package -> [Column] -> Column -> Column
-predictColumn p prev col = col & cells %~ map (maybePredict p prev)
+predictCells :: Package -> Column -> Column
+predictCells p col = col & cells %~ map (predictCell p)
 
 -- | Helper function of predictColumn
-maybePredict :: Package -> [Column] -> Cell -> Cell
-maybePredict p prev cell =
+predictCell :: Package -> Cell -> Cell
+predictCell p cell =
   if predicted
     then cell & cellState %~ (\x -> if x == ActiveCell then ActivePredictiveCell else PredictiveCell)
     else cell & cellState %~ (\x -> if x == ActiveCell then x else InActiveCell)
   where
-    predicted = isPredicted p prev cell
+    predicted = isPredicted p cell
 
 -- | Helper function of maybePredict
-isPredicted :: Package -> [Column] -> Cell -> Bool
-isPredicted p prev c = dendriteIsPredicted p prev $ c ^. dendrites
+isPredicted :: Package -> Cell -> Bool
+isPredicted p c = dendritesArePredicted p $ c ^. dendrites
 
-dendriteIsPredicted :: Package -> [Column] -> [Dendrite] -> Bool
-dendriteIsPredicted p prev = foldl (segmentIsPredicted p prev) False
+dendritesArePredicted :: Package -> [Dendrite] -> Bool
+dendritesArePredicted p = foldl (dendriteIsPredicted p) False
 
-segmentIsPredicted :: Package -> [Column] -> Bool -> [Segment] -> Bool
-segmentIsPredicted p prev = foldl (synapceIsPredicted p prev)
+dendriteIsPredicted :: Package -> Bool -> [Segment] -> Bool
+dendriteIsPredicted p = foldl (segmentIsPredicted p)
 
-synapceIsPredicted :: Package -> [Column] -> Bool -> Segment -> Bool
-synapceIsPredicted p prev b seg = b || seg ^. matchingStrength > p ^. conH . temporalConfig . activationThreshold
+segmentIsPredicted :: Package -> Bool -> Segment -> Bool
+segmentIsPredicted p b seg = b || seg ^. matchingStrength > p ^. conH . temporalConfig . activationThreshold
 
 --------------------------------------------------------------
 --                         Switch
