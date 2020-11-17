@@ -189,7 +189,7 @@ data Column = Column
     -- Else if it is larger or smaller that one, then the `_overlap` value is scaled accordingly.
     _boost :: Float,
     -- | The number of active SDRbits this column is connected to. This value can be boosted by the boost factor.
-    _overlap :: Int,
+    _overlap :: Natural,
     -- | The radius of inhibition i.e. the inhibition algorithm looks at the neighbors of this column, this value determines range of the neighbor.
     _inhibRad :: Natural,
     -- | Active duty cylce. The moving Average rate of how often this column is activated.

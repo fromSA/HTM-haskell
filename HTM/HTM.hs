@@ -32,23 +32,32 @@ module HTM.HTM
 where
 
 import Control.Lens
-    ( (&), (^.), (%~), (+~), (-~), (.~), makeLenses, element )
+  ( element,
+    makeLenses,
+    (%~),
+    (&),
+    (+~),
+    (-~),
+    (.~),
+    (^.),
+  )
 import Control.Monad ()
-import Data.List.Extra (intercalate, sortOn, sumOn')
-import Debug.Trace () -- TODO remove
-import GHC.Natural ( Natural, intToNatural, naturalToInt )
-import HTM.CommonDataTypes ( Index' )
+import Data.List.Extra (sortOn, sumOn')
+import Debug.Trace (traceShowId, traceShow)
+-- TODO remove
+import GHC.Natural (Natural, intToNatural, naturalToInt)
+import HTM.CommonDataTypes (Index')
 import HTM.MovingAverage
 import HTM.Region
 import HTM.SDR (SDR, SDRConfig (..), SDRRange (..), encode, totNrBits)
-import System.Random ( newStdGen )
-import System.Random.Shuffle ( shuffle' )
+import System.Random (newStdGen)
+import System.Random.Shuffle (shuffle')
 
 -- -------------------------------------------------------------
 --                           CONFIG
 -- -------------------------------------------------------------
 
--- | The paramterers for the feedforward synapses that connect the inputField with a region.
+-- | The parameters for the feedforward synapses that connect the inputField with a region and spatial algorithm.
 data SpatialConfig = SpatialConfig
   { -- | The threshold for column activation. If the number of active bits in the inputfield of a column >= this threshold, then the column becomes active.
     _overlapThreshold :: Natural,
@@ -66,8 +75,9 @@ data SpatialConfig = SpatialConfig
 
 makeLenses ''SpatialConfig
 
+-- | The parameters for the temporal algorithm.
 data TemporalConfig = TemporalConfig
-  { -- | The strength of boost value between 0 and 1
+  { -- | The degree of change for the update of '_boost'. It is between 0 and 1.
     _boostStrength :: Float,
     -- | The desired percent of active duty cycle within the sliding window.
     _targetDensity :: Float,
@@ -114,7 +124,6 @@ data Package = Package
 
 -- | Lenses for HTMConfig, used to navigate the record.
 makeLenses ''Package
-
 -- -------------------------------------------------------------
 --                           UPDATE
 -- -------------------------------------------------------------
@@ -141,15 +150,15 @@ updateOverlap p = map (computeOverlap p)
 computeOverlap p c =
   if overlapScore >= p ^. conH . spatialConfig . overlapThreshold
     then
-      c & overlap .~ floor (fromIntegral overlapScore * c ^. boost)
+      -- boost the overlap score, based on the '_boost' factor at the previous iteration.
+      c & overlap .~ floor (c ^. boost * fromIntegral overlapScore)
         & odc %~ on
     else
-      c & overlap .~ 0
+      c & overlap .~ overlapScore
         & odc %~ off
   where
     -- Counts the how many synapses in the inputfield of a column are active
-    overlapScores = sum $ map (fromEnum . isColumnActive p) (c ^. inputField)
-    overlapScore = intToNatural overlapScores
+    overlapScore = intToNatural $ sum $ map (fromEnum . isColumnActive p) (c ^. inputField)
 
 -- | Choose if a column is active or not based on if
 --  the connection strength of the Synapse to the input space is larger than
@@ -173,6 +182,7 @@ maybeActivateColumn p cols col =
 neighbors :: Column -> [Column] -> [Column]
 neighbors col = neighbors' (col ^. columnId) (col ^. inhibRad)
 
+-- | Returns the elements within a radious of an index from a list.
 neighbors' :: Natural -> Natural -> [a] -> [a]
 neighbors' at rad = take rad' . drop (at' - (rad' `div` 2))
   where
@@ -195,9 +205,10 @@ maybeActivate col cols
 --      LEARN      --
 ---------------------
 
--- | Update the connection strength of synapses within a region
+-- | Update the connection strength of synapses within a region and update '_boost' of all columns.
 learn p = map (updateBoost p . learnCol p) -- TODO might be a problem if the connection strength of currentStep and prevStep are different! Maybe separate the synapses from the columns
 
+-- | Update the connection strength of synapses within a region
 learnCol p col
   | col ^. columnState == ActiveColumn = col & inputField %~ map (activateSynapse p)
   | otherwise = col
@@ -253,7 +264,7 @@ activateColumn :: Package -> [Cell] -> [Column] -> (Column, Column) -> IO Column
 activateColumn p pwc prev (c, pr) =
   case c ^. columnState of
     ActiveColumn -> do
-      activeCells <- activateCells p pwc prev (pr ^. cells)
+      activeCells <- activateCells p pwc prev (pr ^. cells)     
       return $ c & cells .~ activeCells
     InActiveColumn -> do
       return $ pr & (cells . traverse) %~ punishPredictedCell p prev
@@ -287,8 +298,10 @@ maintainSparcityPerSegment p pwc prev cell seg =
     then do
       -- The problem is here.
       let prevWinnerCells = filter (not . connectedToSeg seg) pwc
-      let nrOfNewSynapses = (p ^. conR . nrOfSynapsesPerSegment) - (seg ^. matchingStrength)
-      syns <- growSynapses p [] cell nrOfNewSynapses
+      let nrOfNewSynapses = if (p ^. conR . nrOfSynapsesPerSegment) > (seg ^. matchingStrength) 
+          then (p ^. conR . nrOfSynapsesPerSegment) - (seg ^. matchingStrength)
+          else p ^. conR . nrOfSynapsesPerSegment
+      syns <- growSynapses p prevWinnerCells cell nrOfNewSynapses
       let newSeg = seg & synapses %~ (++ syns)
       return newSeg
     else return seg
@@ -321,9 +334,9 @@ burst p pwc prev cells = do
       let newWinnerCell1 = newWinnerCell & dendrites . element d . element s . synapses %~ (++ newSynapses)
       let newWinnerCell2 = newWinnerCell1 & dendrites . element d . element s . matchingStrength +~ intToNatural (length newSynapses)
       -- Mark winnerCell as the winner.
-      let newWinnerCell2 = newWinnerCell & isWinner .~ True
+      let newWinnerCell3 = newWinnerCell2 & isWinner .~ True
 
-      return $ currentCells & element c .~ newWinnerCell2
+      return $ currentCells & element c .~ newWinnerCell3
     else -- grow synapses on a new segment on the least used Cell
     do
       -- Find the least used cell
@@ -341,7 +354,7 @@ burst p pwc prev cells = do
       let newWinnerCell1 = addSegment newWinnerCell newSynapses
 
       -- Mark winnerCell as the winner.
-      let newWinnerCell2 = newWinnerCell & isWinner .~ True
+      let newWinnerCell2 = newWinnerCell1 & isWinner .~ True
 
       return $ currentCells & element lc .~ newWinnerCell2
 
