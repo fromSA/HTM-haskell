@@ -16,18 +16,6 @@ type SDR = [BitIndex]
 
 data Encoder = Numeric | Categorical
 
-{- Numeric Range
-  | NumbericLog -- These are types of encodings.
-  | Delta
-  | Category Cyclic Order
-  | Geospatial Range Speed
-  | Text
-
-data Range = Bounded | UnBounded
-data InputValue = Number | Vector
-data Number = Continues Range | Discrete Range
--}
-
 -- | The range of an SDR.
 data SDRRange = SDRRange
   { -- | The smallest sdr bit index. TODO remove this, because it is implisit = 0
@@ -62,7 +50,7 @@ totNrBits config = sum (map ($ config) [(^. buckets), (^. bitsPerBucket)]) - 1
 encode :: Int -> SDRConfig -> SDR
 encode n config =
   let start = getStartOf n config
-   in [start + i | i <- [0 .. (config ^. bitsPerBucket - 1)]]
+   in [start + i | i <- [0 .. (config ^. bitsPerBucket -1 )]]
 
 -- | Get the encoding start position of a value in the SDR.
 getStartOf :: Int -> SDRConfig -> Natural
