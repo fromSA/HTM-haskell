@@ -2,11 +2,11 @@
 A Haskell implementation of the Hierarchical Temporal Memory algorithm by Numenta.
 
 ## Implementation
-- [ ] spatial pooler
-    - [ ] Compute overlap
-    - [ ] Inhition
-    - [ ] Learning
-- [ ] temporal pooler
+- [ ] spatial pooler 
+    - [x] Compute overlap
+    - [x] Inhition
+    - [x] Learning
+- [ ] temporal pooler [The inspirational paper](https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf)
     - [ ] Add context
         - [ ] activatePredictedColumn
             - [ ] select winner cells
@@ -23,5 +23,15 @@ A Haskell implementation of the Hierarchical Temporal Memory algorithm by Nument
     - [ ] Predict
         - [ ] activate predicted synpases
 
-## Testing
-- [ ] 
+## Functions Tested
+- [ ] updateOverlap
+    - [ ] Compute overlap
+    - [ ] isColumnActive
+- [ ] updateInhibition
+- [ ] learn
+- 
+
+
+# Documented Functions and Records
+- [x] HTMConfig
+- [ ] Package 
