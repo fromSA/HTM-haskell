@@ -43,7 +43,7 @@ import Control.Lens
   )
 import Control.Monad ()
 import Data.List.Extra (sortOn, sumOn')
-import Debug.Trace (traceShowId, traceShow)
+import Debug.Trace (traceShow, traceShowId)
 -- TODO remove
 import GHC.Natural (Natural, intToNatural, naturalToInt)
 import HTM.CommonDataTypes (Index')
@@ -124,6 +124,7 @@ data Package = Package
 
 -- | Lenses for HTMConfig, used to navigate the record.
 makeLenses ''Package
+
 -- -------------------------------------------------------------
 --                           UPDATE
 -- -------------------------------------------------------------
@@ -149,8 +150,8 @@ updateOverlap p = map (computeOverlap p)
 -- | Updates the overlap score of a column
 computeOverlap p c =
   if overlapScore >= p ^. conH . spatialConfig . overlapThreshold
-    then
-      -- boost the overlap score, based on the '_boost' factor at the previous iteration.
+    then -- boost the overlap score, based on the '_boost' factor at the previous iteration.
+
       c & overlap .~ floor (c ^. boost * fromIntegral overlapScore)
         & odc %~ on
     else
@@ -264,7 +265,7 @@ activateColumn :: Package -> [Cell] -> [Column] -> (Column, Column) -> IO Column
 activateColumn p pwc prev (c, pr) =
   case c ^. columnState of
     ActiveColumn -> do
-      activeCells <- activateCells p pwc prev (pr ^. cells)     
+      activeCells <- activateCells p pwc prev (pr ^. cells)
       return $ c & cells .~ activeCells
     InActiveColumn -> do
       return $ pr & (cells . traverse) %~ punishPredictedCell p prev
@@ -284,24 +285,19 @@ activatePredictedCells p pwc prev = mapM (activatePredictedCell p pwc prev)
 activatePredictedCell :: Package -> [Cell] -> [Column] -> Cell -> IO Cell
 activatePredictedCell p pwc prev cell
   | cell ^. cellState == PredictiveCell || cell ^. cellState == ActivePredictiveCell = do
-    ndend <- maintainSparcityPerDendrite p pwc prev cell $ learnActiveSegments p prev (cell ^. dendrites)
+    ndend <- maintainSparcityPerDendrite p pwc cell $ learnActiveSegments p prev (cell ^. dendrites)
     return cell {_isWinner = True, _cellState = ActiveCell, _dendrites = ndend}
   | otherwise = return cell {_isWinner = False, _cellState = InActiveCell}
 
 -- | Grow new synpases (nrOfSynapsesPerSegment - matching synapses) on each active Segment.
-maintainSparcityPerDendrite :: Package -> [Cell] -> [Column] -> Cell -> [Dendrite] -> IO [Dendrite]
-maintainSparcityPerDendrite p pwc prev cell den = sequence $ den & traverse %~ \x -> sequence $ x & traverse %~ maintainSparcityPerSegment p pwc prev cell -- TODO extract Segment and return an IO Dendrite
+maintainSparcityPerDendrite :: Package -> [Cell] -> Cell -> [Dendrite] -> IO [Dendrite]
+maintainSparcityPerDendrite p pwc cell den = sequence $ den & traverse %~ \x -> sequence $ x & traverse %~ maintainSparcityPerSegment p pwc cell -- TODO extract Segment and return an IO Dendrite
 
-maintainSparcityPerSegment :: Package -> [Cell] -> [Column] -> Cell -> Segment -> IO Segment
-maintainSparcityPerSegment p pwc prev cell seg =
+maintainSparcityPerSegment :: Package -> [Cell] -> Cell -> Segment -> IO Segment
+maintainSparcityPerSegment p pwc cell seg =
   if seg ^. matchingStrength >= p ^. conH . temporalConfig . activationThreshold
     then do
-      -- The problem is here.
-      let prevWinnerCells = filter (not . connectedToSeg seg) pwc
-      let nrOfNewSynapses = if (p ^. conR . nrOfSynapsesPerSegment) > (seg ^. matchingStrength) 
-          then (p ^. conR . nrOfSynapsesPerSegment) - (seg ^. matchingStrength)
-          else p ^. conR . nrOfSynapsesPerSegment
-      syns <- growSynapses p prevWinnerCells cell nrOfNewSynapses
+      syns <- maintainSparcity p cell pwc seg
       let newSeg = seg & synapses %~ (++ syns)
       return newSeg
     else return seg
@@ -323,13 +319,11 @@ burst p pwc prev cells = do
     then -- grow synapses on the bestmatchingsegment
     do
       let newWinnerCell = currentCells !! c
+      let bestMacthingSeg = (newWinnerCell ^. dendrites) !! d !! s
       -- Find winnercells from the previous iteration that are not connected to this winnercells
 
-      let unConnectedPrevWinnerCells = filter (not . connectedTo newWinnerCell) pwc
-      -- grow synapses from the newWinnerCell to the winnercells from the previous iteration
-      let nrOfNewSynapses = p ^. conR . nrOfSynapsesPerSegment - matchVal
+      newSynapses <- maintainSparcity p newWinnerCell pwc bestMacthingSeg
 
-      newSynapses <- growSynapses p unConnectedPrevWinnerCells newWinnerCell nrOfNewSynapses
       -- Append the new synapses to bestMatchingSegment
       let newWinnerCell1 = newWinnerCell & dendrites . element d . element s . synapses %~ (++ newSynapses)
       let newWinnerCell2 = newWinnerCell1 & dendrites . element d . element s . matchingStrength +~ intToNatural (length newSynapses)
@@ -343,24 +337,36 @@ burst p pwc prev cells = do
       let lc = naturalToInt $ leastUsedCell currentCells
       -- Add a new segment on the least used cell
       let newWinnerCell = currentCells !! lc
-      -- Find winnercells from the previous iteration that are not connected to this winnercells
-      let unConnectedPrevWinnerCells = filter (not . connectedTo newWinnerCell) pwc
 
-      -- grow synapses from the newWinnerCell to the winnercells from the previous iteration
-      let nrOfNewSynapses = p ^. conR . nrOfSynapsesPerSegment
+      let newSegment = growSegment
+      newSynapses <- maintainSparcity p newWinnerCell pwc newSegment
+      let newSegment2 =
+            newSegment
+              & synapses .~ newSynapses
+              & matchingStrength .~ intToNatural (length newSynapses)
 
-      newSynapses <- growSynapses p unConnectedPrevWinnerCells newWinnerCell nrOfNewSynapses
-      -- Add a segment with these new synapses to the winnerCell
-      let newWinnerCell1 = addSegment newWinnerCell newSynapses
+      -- Add a segment with these new synapses to the winnerCell. Prepends a new segment to the first dendrite in this cell.
+      let newWinnerCell1 = newWinnerCell & dendrites %~ \xs -> (newSegment2 : head xs) : tail xs
 
       -- Mark winnerCell as the winner.
       let newWinnerCell2 = newWinnerCell1 & isWinner .~ True
 
       return $ currentCells & element lc .~ newWinnerCell2
 
--- | Prepends a new segment to the first dendrite in this cell.
-addSegment :: Cell -> [Synapse] -> Cell
-addSegment cell syns = cell & dendrites %~ (\dend -> (Segment {_segmentState = InActiveSegment, _synapses = syns, _matchingStrength = intToNatural (length syns)} : head dend) : tail dend)
+maintainSparcity :: Package -> Cell -> [Cell] -> Segment -> IO [Synapse]
+maintainSparcity p cell pwc seg = do
+  -- Find winnercells from the previous iteration that are not connected to this winnercells
+  let unConnectedPrevWinnerCells = filter (not . connectedToSeg seg) pwc
+  -- grow synapses from the newWinnerCell to the winnercells from the previous iteration
+  let nrOfNewSynapses =
+        if (p ^. conR . nrOfSynapsesPerSegment) > (seg ^. matchingStrength)
+          then (p ^. conR . nrOfSynapsesPerSegment) - (seg ^. matchingStrength)
+          else p ^. conR . nrOfSynapsesPerSegment
+  -- grow synapses from the newWinnerCell to the winnercells from the previous iteration
+  growSynapses p unConnectedPrevWinnerCells cell nrOfNewSynapses
+
+growSegment :: Segment
+growSegment = Segment {_segmentState = InActiveSegment, _synapses = [], _matchingStrength = 0}
 
 --  Grow new synapses. TODO what happens if there are not enough winnercells?
 growSynapses :: Package -> [Cell] -> Cell -> Index' -> IO [Synapse]
@@ -561,56 +567,3 @@ synapceIsPredicted p prev b seg = b || seg ^. matchingStrength > p ^. conH . tem
 -- | Move the region to the next time step.
 switch :: Region -> Region
 switch r = Region (r ^. previousStep) (r ^. currentStep)
-
---TODO
---TODO initConnecitonStrength should be a distribution around a center
--- Problem, I am computing matchingstrength several times.
--- Problem, I am growing synapses three places, it should 2
--- Problem, always passing HTMConfig, RegionConfig through all functions, need a better way.
--- The configs
--- The Random Generator
--- A debugger, printing
---TODO to maintain fixed sparcity, we must grow synapses to active cells in prev
--- add a step value in cell ID (Why?)
--- change the step for the current value.
--- add the pointer of the step value of ID when initCells.
--- See if there is an abstraction that does not need a duplicaiton of the a whole region for each step
--- The dendrites are the same for currentStep and previous step.
--- use the ActivePredictiveCell state of a cell in learning
--- avoid code duplicate
-
--- Represent input within the previous context
--- For each active column -> activate predictive cells | activate all cells (burst, if no cell is predictive)
--- Predict next state
--- For cells with n nr of Active Dentrite -> Predict state
--- Update PermenanceValue between
-
--- TODO
--- Clean up and improve Code
--- Add a function that creates a segment
--- Implement temporal pooler
--- TODO perhaps use a rotational representation?
-
---- Spatial pooler
---TODO
--- Update permanence
-
--- initialize
--- first map input to region -- DONE
--- phase1 : overlap
--- activate columns based on their input field
--- phase2 : Inhibition
--- boost the column (to maintain a fixed sparcity)
--- phase 3 : learning
--- update permenance values of each Sensory
-
---activateColumns config sdr region = region { currentStep = learn . (updateInhibition config) $ updateOverlap config sdr (currentStep region)}
--- for each column -> compute overlap & boost it by the boost factor
--- for each column -> activate columns if the column is not inhibited
--- Learning: for each active column -> update permanence
--- UpdateBoosting: for each columns ->
--- update boosting/
--- update active duty & overlap cycle
--- update inhibition radius
-
---------------------------------------------------------------------------------
