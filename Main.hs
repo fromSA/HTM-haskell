@@ -1,25 +1,26 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
 module Main where
 import           Data.Maybe
 import           HaskellSay (haskellSay)
-import           HTM
-import Region
-import SDR
-import MovingAverage
+import           HTM.HTM 
 import           System.Random
-import Data.List (sortOn)
-import System.Random.Shuffle
-import Control.Lens
+import           Data.List (sortOn)
+import           System.Random.Shuffle
+import           Control.Lens
+import           Debug.Trace
 -- TODO
 -- Clean up and improve Code
 -- Add a function that creates a segment
 -- Implement temporal pooler
 -- TODO perhaps use a rotational representation?
 
+neigh :: Int-> Int -> [a] -> [a]
+neigh at rad = take rad . drop (at - (rad `div` 2))
+
 main :: IO ()
 main = do
-
   -- Random generator
-  gen <- newStdGen 
 
   -- Configerations
   let sdrConfig = initSDRConfig 
@@ -31,24 +32,35 @@ main = do
   region <- initRegion sdrConfig regionConfig
 
   -- InputData
-  let seqData = [50,20,25,20]
+  let seqData = [50,20,20,20,20,20]
 
-  -- Learning/Predicting, i.e. spacial and temporal poolers
+  -- Learning/Predicting, i.e. spatial and temporal poolers
   compute seqData package region
 
   
 
--- main = print <$> spacialPooler <*> (encode 12 sdrConfig) <*> (initRegion initConfig initSDRConfig)
+-- main = print <$> spatialPooler <*> (encode 12 sdrConfig) <*> (initRegion initConfig initSDRConfig)
 
 
 compute :: [Int] -> Package -> Region -> IO ()
-compute [] p region = print region
-compute (x:xs) p region = do
+compute [] p region = do
+  putStrLn "last encoding"
   print region
+compute (x:xs) p region = do
+  putStrLn "----- next encoding"
   let encodedSDR = encode x (_conS p)
-  let regionSpat =  spacialPooler p{_sdr = encodedSDR} region
-  --regionTemp <- temporalPooler (_conH p) (_conR p) regionSpat -- There is an eternal loop here
-  compute xs p regionSpat
+  
+  --putStrLn "spatial began"
+  
+  let regionSpat =  spatialPooler p{_sdr = encodedSDR} region
+
+  print regionSpat
+  --putStrLn "temporal began"
+
+  regionTemp <- temporalPooler p regionSpat -- There is an eternal loop here
+  --print regionTemp
+  
+  compute xs p regionTemp
 
 initPackage :: HTMConfig -> RegionConfig -> SDRConfig -> Package
 initPackage h r s = Package{
@@ -60,41 +72,45 @@ initPackage h r s = Package{
 
 initSDRConfig :: SDRConfig
 initSDRConfig = SDRConfig{
-  minVal          = 0
-  , maxVal        = 100
-  , buckets       = 50
-  , bitsPerBucket = 30
-  , sdrRange = SDRRange {minIndex  = 0, maxIndex = sum [50{- bucket -}, 30{- bitsPerBucket -}] - 1}
+  _minVal          = 0
+  , _maxVal        = 100
+  , _buckets       = 50
+  , _bitsPerBucket = 30
+  , _sdrRange = SDRRange {_minIndex  = 0, _maxIndex = sum [50{- bucket -}, 30{- bitsPerBucket -}] - 1}
 }
 
 initRegionConfig :: RegionConfig
 initRegionConfig = RegionConfig{
   _nrOfColumns = 100
-  , _nrOfCellsPerColumn = 1
-  , _maxNrOfInputBits = 3
+  , _nrOfCellsPerColumn = 2
+  , _maxNrOfInputBits = 6
   , _nrOfSynapsesPerSegment = 4
   , _mappingType = Random
-  , _initConnectionStrength = 1.0
+  , _initConnectionStrength = 0.7
   , _mvWindow = 3
 }
 
 initHTMConfig :: HTMConfig
 initHTMConfig = HTMConfig{
-  _overlapThreshold = 0
-  , _pConthresh = 0.2
-  , _colActLev = 1
-  , _proxSynConInc = 0.2
-  , _proxSynConDec = 0.2
-  , _mop = 0.2
-  , _targetDensity = 0.3
-  , _boostStrength = 0.3
-  , _connectedPermenance = 0.5
-  , _activationThreshold = 2 
-  , _predictedDecrement = 0.1
-  , _permanenceIncrement = 0.1
-  , _permanenceDecrement = 0.1
-  , _learningThreshold = 2
-  , _learningEnabled = True
+  _spatialConfig = SpatialConfig{
+    _overlapThreshold = 0
+    , _mop = 0.2
+    , _proxSynConInc = 0.2
+    , _proxSynConDec = 0.2
+    , _pConthresh = 0.2
+    , _colActLev = 1
+  },
+  _temporalConfig = TemporalConfig{
+     _targetDensity = 0.3
+    , _boostStrength = 0.3
+    , _connectedPermenance = 0.5
+    , _activationThreshold = 2 
+    , _predictedDecrement = 0.1
+    , _permanenceIncrement = 0.2
+    , _permanenceDecrement = 0.2
+    , _learningThreshold = 2
+    , _learningEnabled = True
+  }
 }
 
 {-

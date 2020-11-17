@@ -5,22 +5,42 @@ cabal-version:       2.4
 
 name:                HTM-haskell
 version:             0.1.0.0
--- synopsis:
--- description:
+synopsis:            implementation of Numentas HTM algorithm
+description:         A simulation of a region in a neocortex. The algorithm is developed by
+                     the numenta research group. 
+                     Check 
+                     1. https://arxiv.org/pdf/1601.06116.pdf 
+                     2. https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/ The spatial pooler
+                     3. https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf The temporal pooler
+                     
+                     
 -- bug-reports:
--- license:
+license:             AGPL-3.0-or-later
 license-file:        LICENSE
-author:              Fromsa Hera
-maintainer:          fromsahera28@gmail.com
+author:              Fromsa Hera, fromsahera28@gmail.com
+maintainer:          Fromsa Hera, fromsahera28@gmail.com
 -- copyright:
--- category:
+category:            Ariticial Intelligence
+                     , Scientific Simulation
+                     , Machine Learning
 build-type:          Simple
 extra-source-files:  CHANGELOG.md, README.md
 
-executable HTM-haskell
-  main-is:             Main.hs
-  other-modules:       HTM, MovingAverage, Region, SDR
+library
+  exposed-modules:     Main
+                       , HTM.HTM
+                       , HTM.MovingAverage
+                       , HTM.Region
+                       , HTM.SDR
+                       , HTM.CommonDataTypes
+  --main-is:             Main.hs
+  --other-modules:       HTM, MovingAverage, Region, SDR
   -- other-extensions:
-  build-depends:       base >=4.13 && <4.14, haskell-say ^>=1.0.0.0, random, lens, extra ^>=1.7.8, random-shuffle ^>=0.0.4
+  build-depends:       base >=4.13 && <4.14
+                      , haskell-say ^>=1.0.0.0
+                      , random
+                      , lens
+                      , extra ^>=1.7.8
+                      , random-shuffle ^>=0.0.4
   -- hs-source-dirs:
   default-language:    Haskell2010
