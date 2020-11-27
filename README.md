@@ -36,10 +36,11 @@ A Haskell implementation of the Hierarchical Temporal Memory algorithm by Nument
 # Documented Functions and Records
 - [x] HTMConfig
 - [ ] Package 
+- [x] MovingAverage
+- [ ] Encoder.Numeric
 
 # Future TODOS
 - [ ] Encoders
-    - [ ] create an Encoder Module
     - [ ] add other types of Encoders.
         {- Numeric Range
         | NumbericLog -- These are types of encodings.
@@ -52,4 +53,7 @@ A Haskell implementation of the Hierarchical Temporal Memory algorithm by Nument
         data InputValue = Number | Vector
         data Number = Continues Range | Discrete Range
         -}
--[ ]  
+-[ ] 
+
+# Issues
+- [ ] The creation of haddock documentation for lenses, when using Haskell Template is not possible yet. It is an open issue in GHC. Therefore, lenses do not have documentations yet. [IssueLink](https://github.com/ekmett/lens/issues/614)
