@@ -23,16 +23,17 @@ data EncoderType =
     Numeric 
     -- | A categorical encoder, encodes a bounded set of independet values. OBS. Not implemented yet.
     | Categorical
+    deriving(Show)
 
--- | The SDR config for the input value. Here, the input is a single integer between minVal and maxVal
+-- | The SDR config for the input-value. Here, the input is a single integer between minVal and maxVal
 data EncoderConfig = EncoderConfig
   { -- | The kind of encoder to use. This depends on the type of data you plan to work with.
     _encoderType :: EncoderType,
-    -- | The minimum possible value of the input value.
+    -- | The minimum possible value of the input-value.
     _minVal :: Int,
-    -- | The maximum possible value of the input value.
+    -- | The maximum possible value of the input-value.
     _maxVal :: Int,
-    -- | The inputvalues are grouped into buckets, where each bucket represents 1 or more input values.
+    -- | The input-values are grouped into buckets, where each bucket represents 1 or more input-values.
     _buckets :: Natural,
     -- | Each bucket is encoded with this number of bits in the inputSDR.
     _bitsPerBucket :: Natural
@@ -47,7 +48,7 @@ getRange conE = SDRRange{
     _maxIndex = sum [conE^.buckets ,  conE^. bitsPerBucket] - 1
 }
 
--- | Encodes an input value as an SDR.
+-- | Encodes an input-value as an SDR.
 -- 
 -- >>> let encoder = EncoderConfig Numeric 2 10 8 1
 -- >>> encode 2 encoder

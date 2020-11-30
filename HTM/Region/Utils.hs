@@ -52,7 +52,7 @@ getRandomCell conR notCell columns = do
 
 -- | Returns a list of random SDR indecies from the SDR range defined by the encoder configuration.
 selectRandomIndecies :: EncoderConfig -> RegionConfig -> [IO BitIndex]
-selectRandomIndecies conS conR = randIndecies (conR ^. maxNrOfInputBits) (getRange conS)
+selectRandomIndecies conS conR = randIndecies (conR ^. initNrOfFeedForwardSynpases) (getRange conS)
 
 -- | Returns n random bit indecies from an sdr range.
 randIndecies :: Natural -> SDRRange -> [IO BitIndex]

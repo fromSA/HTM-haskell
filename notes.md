@@ -7,6 +7,7 @@
 # TODO Code
 - The columns depend on the moving average when being initilized. This should something the HTM algorithm should deside.
 
+-- [ ] Convert FeedForwardSynapse to ProximalSynapse and Synapses to DistalSynapse
 -- [ ] Allow saving and loading the model.
 -- [ ] TODO fix this, it is ugly! getting random cell in HTM.Region.Utils
 -- [ ] TODO double check that no duplicates occure in randIndecies in Region.Utils

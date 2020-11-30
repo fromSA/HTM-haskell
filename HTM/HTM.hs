@@ -69,7 +69,7 @@ import System.Random.Shuffle (shuffle')
 data SpatialConfig = SpatialConfig
   { -- | The threshold for column activation. If the number of active bits in the inputfield of a column >= this threshold, then the column becomes active.
     _overlapThreshold :: Natural,
-    -- | The minimum percent of active bits in inputField expected to have a overlap with.
+    -- | The minimum percent of active bits in inputField expected to have a overlap with a column.
     _mop :: Float,
     -- | The amount to decrease the connection strength of a synapses with for proximal synapses
     _proxSynConInc :: Float,
@@ -77,7 +77,7 @@ data SpatialConfig = SpatialConfig
     _proxSynConDec :: Float,
     -- | A synapse with connection strength >= this threshold is considered permenantly connected.
     _pConthresh :: Float,
-    -- | The desired column activity level within inhibition radius i.e. the number of columns in that should be activated within a activaiton radius.
+    -- | The desired column activity level within inhibition radius i.e. the number of columns that should be activated within the inhibition radius.
     _colActLev :: Natural
   }
 

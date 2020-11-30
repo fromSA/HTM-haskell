@@ -18,7 +18,7 @@ module HTM.Region.Config
     nrOfSynapsesPerSegment,
     mappingType,
     initConnectionStrength,
-    maxNrOfInputBits,
+    initNrOfFeedForwardSynpases,
     mvWindow,
   )
 where
@@ -30,7 +30,7 @@ import GHC.Natural ( Natural )
 data MappingType = 
     -- | Connect a column in a Region to constant subset of SDR bit indecies selected randomly.
     Random
-
+    deriving(Show)
 -- -------------------------------------------------------------
 --                           CONFIG
 -- -------------------------------------------------------------
@@ -42,7 +42,7 @@ data RegionConfig = RegionConfig
     -- | The number of cells per column in the region. It is the same for all cells.
     _nrOfCellsPerColumn :: Natural,
     -- | The maximum number of input bits in the inputfield connected to a Column.
-    _maxNrOfInputBits :: Natural,
+    _initNrOfFeedForwardSynpases :: Natural,
     -- | The number of initial synapses per segment.
     _nrOfSynapsesPerSegment :: Natural,
     -- | The mapping type between an input sdr and region columns -- TODO delete
