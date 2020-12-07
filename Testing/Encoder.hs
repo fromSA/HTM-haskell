@@ -1,7 +1,9 @@
-{-# LANGUAGE TemplateHaskell, DeriveGeneric#-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Testing.Encoder where
 
+import GHC.Generics (Generic)
 import GHC.Natural
 import Generic.Random
 import HTM.Encoder.Numeric
@@ -11,7 +13,6 @@ import Test.QuickCheck
 import Test.QuickCheck.All ()
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Instances ()
-import GHC.Generics ( Generic ) 
 
 instance Arbitrary EncoderType where
   arbitrary = chooseEnum (Numeric, Categorical)
@@ -48,10 +49,10 @@ prop_getRange r = maybe False checkSDRRangeInvariant (getRange r)
 data ValidInt = ValidInt {v :: Int, c :: EncoderConfig} deriving (Show, Generic)
 
 instance Arbitrary ValidInt where
-    arbitrary = do
-        c <- arbitrary :: Gen EncoderConfig
-        a <- chooseInt (_minVal c , _maxVal c)
-        return $ ValidInt a c
+  arbitrary = do
+    c <- arbitrary :: Gen EncoderConfig
+    a <- chooseInt (_minVal c, _maxVal c)
+    return $ ValidInt a c
 
 -- encode
 prop_encodeValidInput :: ValidInt -> Bool
@@ -59,23 +60,34 @@ prop_encodeValidInput inn = case encode (c inn) (v inn) of
   Just _ -> True
   Nothing -> False
 
-
 data InValidInt = InValidInt {iv :: Int, ic :: EncoderConfig} deriving (Show, Generic)
 
 instance Arbitrary InValidInt where
-    arbitrary = do
-        c <- arbitrary :: Gen EncoderConfig
-        a <- chooseInt (_minVal c - 100 , _minVal c - 1)
-        return $ InValidInt a c
+  arbitrary = do
+    c <- arbitrary :: Gen EncoderConfig
+    a <- chooseInt (_minVal c - 100, _minVal c - 1)
+    return $ InValidInt a c
 
 prop_rejectInValidInput :: InValidInt -> Bool
 prop_rejectInValidInput inn = case encode (ic inn) (iv inn) of
   Just _ -> False
   Nothing -> True
 
+checkSDREncodingInvariant :: SDR -> Bool
+checkSDREncodingInvariant s =
+  a
+    && head (x : xs) >= _minIndex (_sdrRange s) -- with in SDR Range
+    && last (x : xs) <= _maxIndex (_sdrRange s) -- with in SDR Range
+  where
+    (x : xs) = _sdr s
+    a = length (x : xs) <= 1 || fst (foldl (\(b, prev) next -> (b && (prev + 1) == next, next)) (True, x) xs) -- continues indecies
+
+prop_encodedSDRInvariant :: ValidInt -> Bool
+prop_encodedSDRInvariant inn = maybe False checkSDREncodingInvariant (encode (c inn) (v inn))
+
 --------------------------------------
 --           Run All tests          --
-return []
+return [] -- Yikes!
 
 runTests :: IO Bool
 runTests = $quickCheckAll
