@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DeriveGeneric #-}
+
 
 --{-# OPTIONS_HADDOCK hide, prune, ignore-exports #-}
 
@@ -17,6 +18,7 @@ module HTM.SDR where
 
 import Control.Lens (makeLenses)
 import HTM.CommonDataTypes (BitIndex)
+import GHC.Generics ( Generic ) 
 
 -- | A data type for the possible range of an SDR value.
 data SDRRange = SDRRange
@@ -25,7 +27,7 @@ data SDRRange = SDRRange
     -- | The largest sdr bit index.
     _maxIndex :: BitIndex
   }
-  deriving (Show)
+  deriving (Show, Generic)
 
 makeLenses ''SDRRange
 
