@@ -50,7 +50,7 @@ checkEncoderInvariant c =
   _maxVal c >= _minVal c
     && _buckets c > 0
     && _bitsPerBucket c > 0
-    && _maxVal c - _minVal c >= naturalToInt (_buckets c)
+    && (_maxVal c - _minVal c) + 1 >= naturalToInt (_buckets c)
 
 -- | Given the configuration for the encoder, returns the range of possible bit indecies of the SDR.
 getRange :: EncoderConfig -> Maybe SDRRange
@@ -81,9 +81,9 @@ getRange conE =
 -- >>> let encoder = EncoderConfig Numeric 2 10 8 1
 -- >>> encode 11 encoder
 -- Nothing
-encode :: Int -> EncoderConfig -> Maybe SDR
-encode val config =
-  if val <= config ^. maxVal && val >= config ^. minVal
+encode :: EncoderConfig -> Int -> Maybe SDR
+encode config val =
+  if validInputValue config val
     then
       let start = getStartOf val config
        in ( \range ->
@@ -95,6 +95,9 @@ encode val config =
           )
             =<< getRange config
     else Nothing
+
+validInputValue :: EncoderConfig -> Int -> Bool
+validInputValue c i = i <= c ^. maxVal && i >= c ^. minVal
 
 -- | Get the encoding start position of a value in the SDR.
 getStartOf :: Int -> EncoderConfig -> Natural

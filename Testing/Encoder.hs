@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DeriveGeneric#-}
 
 module Testing.Encoder where
 
@@ -11,6 +11,7 @@ import Test.QuickCheck
 import Test.QuickCheck.All ()
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Instances ()
+import GHC.Generics ( Generic ) 
 
 instance Arbitrary EncoderType where
   arbitrary = chooseEnum (Numeric, Categorical)
@@ -25,7 +26,7 @@ instance Arbitrary EncoderConfig where
     return $ EncoderConfig ty mi ma bu bi
 
 chooseNatural :: (Int, Int) -> Gen Natural
-chooseNatural (a,b) = MkGen (\r _ -> let (x, _) = randomR (a,b) r in intToNatural (max (max 0 a) x))
+chooseNatural (a, b) = MkGen (\r _ -> let (x, _) = randomR (a, b) r in intToNatural (max (max 0 a) x))
 
 -------------------------------------
 --           Properties            --
@@ -44,6 +45,33 @@ checkSDRRangeInvariant r =
 prop_getRange :: EncoderConfig -> Bool
 prop_getRange r = maybe False checkSDRRangeInvariant (getRange r)
 
+data ValidInt = ValidInt {v :: Int, c :: EncoderConfig} deriving (Show, Generic)
+
+instance Arbitrary ValidInt where
+    arbitrary = do
+        c <- arbitrary :: Gen EncoderConfig
+        a <- chooseInt (_minVal c , _maxVal c)
+        return $ ValidInt a c
+
+-- encode
+prop_encodeValidInput :: ValidInt -> Bool
+prop_encodeValidInput inn = case encode (c inn) (v inn) of
+  Just _ -> True
+  Nothing -> False
+
+
+data InValidInt = InValidInt {iv :: Int, ic :: EncoderConfig} deriving (Show, Generic)
+
+instance Arbitrary InValidInt where
+    arbitrary = do
+        c <- arbitrary :: Gen EncoderConfig
+        a <- chooseInt (_minVal c - 100 , _minVal c - 1)
+        return $ InValidInt a c
+
+prop_rejectInValidInput :: InValidInt -> Bool
+prop_rejectInValidInput inn = case encode (ic inn) (iv inn) of
+  Just _ -> False
+  Nothing -> True
 
 --------------------------------------
 --           Run All tests          --
