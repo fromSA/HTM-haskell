@@ -1,59 +1,21 @@
 # HTM-haskell
 A Haskell implementation of the Hierarchical Temporal Memory algorithm by Numenta.
 
-## Implementation
-- [x] spatial pooler [The inspirational paper](https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/), [and also for the boosting](https://arxiv.org/pdf/1601.06116.pdf)
-    - [x] Compute overlap
-    - [x] Inhition
-    - [x] Learning
-- [x] temporal pooler [The inspirational paper](https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf)
-    - [x] Add context
-        - [x] activatePredictedColumn
-            - [x] select winner cells
-            - [x] learn
-        - [x] burst Column
-            - [x] select winner cell 
-                - [x] best matching
-                - [x] least used
-            - [x] learn
-        - [x] punishPredictedColumn
-    - [x] maintain sparcity 
-        - [x] grow new segments
-        - [x] add new synapses
-        - [x] remove dead synapses
-        - [x] punishing synapses
-    - [x] Predict
-        - [x] activate predicted synpases
+Cl## References
+- [SpacitialPooler] (https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/)
+- [TemporalPooler] (https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf)
+- [Encoding]
+- [Boosting](https://arxiv.org/pdf/1601.06116.pdf)
 
-## Functions Tested
-- [ ] updateOverlap
-    - [ ] Compute overlap
-    - [ ] isColumnActive
-- [ ] updateInhibition
-- [ ] learn
-- 
+## Implementation milestone
+[See wiki](https://github.com/fromSA/HTM-haskell/wiki/Implementations)
 
-# Documented Functions and Records
-- [x] HTMConfig
-- [ ] Package 
-- [x] MovingAverage
-- [ ] Encoder.Numeric
+## Testing
+[see wiki](https://github.com/fromSA/HTM-haskell/wiki/Testing)
 
-# Future TODOS
-- [ ] Encoders
-    - [ ] add other types of Encoders.
-        {- Numeric Range
-        | NumbericLog -- These are types of encodings.
-        | Delta
-        | Category Cyclic Order
-        | Geospatial Range Speed
-        | Text
-
-        data Range = Bounded | UnBounded
-        data InputValue = Number | Vector
-        data Number = Continues Range | Discrete Range
-        -}
--[ ] 
+## Documentation
+[wiki](https://github.com/fromSA/HTM-haskell/wiki/Documentation)
+[Haddock](file:///Users/fromsahera/FH/UIB/INF319/TheProject/HTM-haskell/dist-newstyle/build/x86_64-osx/ghc-8.8.4/HTM-haskell-0.1.0.0/doc/html/HTM-haskell/index.html)
 
 # Issues
-- [ ] The creation of haddock documentation for lenses, when using Haskell Template is not possible yet. It is an open issue in GHC. Therefore, lenses do not have documentations yet. [IssueLink](https://github.com/ekmett/lens/issues/614)
+[See](https://github.com/fromSA/HTM-haskell/issues)
