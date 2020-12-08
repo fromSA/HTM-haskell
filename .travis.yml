@@ -1,6 +1,6 @@
 language: haskell
 ghc: 
-  - "8.6.4"
+  - "7.10.3"
 os: 
   - osx
   - linux
