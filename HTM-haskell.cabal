@@ -47,5 +47,9 @@ library
                       , extra ^>=1.7.8
                       , random-shuffle ^>=0.0.4
                       , data-accessor-template
+                      , QuickCheck
+                      , generic-random
+                      , quickcheck-instances
+                      , HUnit
   -- hs-source-dirs:
   default-language:    Haskell2010
