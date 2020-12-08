@@ -1,6 +1,1 @@
 language: haskell
-ghc: 
-  - "7.10.3"
-os: 
-  - osx
-  - linux
