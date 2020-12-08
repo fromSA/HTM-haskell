@@ -17,5 +17,5 @@ A Haskell implementation of the Hierarchical Temporal Memory algorithm by Nument
 # References
 - [SpacitialPooler] (https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/)
 - [TemporalPooler] (https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf)
-- [Encoding]
+- [Encoding](https://arxiv.org/pdf/1602.05925.pdf)
 - [Boosting](https://arxiv.org/pdf/1601.06116.pdf)
