@@ -9,10 +9,12 @@ import Generic.Random
 import HTM.Encoder.Numeric
 import HTM.SDR
 import System.Random
+import qualified Test.HUnit as TH
 import Test.QuickCheck
 import Test.QuickCheck.All ()
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Instances ()
+import Text.Printf
 
 instance Arbitrary EncoderType where
   arbitrary = chooseEnum (Numeric, Categorical)
@@ -85,12 +87,84 @@ checkSDREncodingInvariant s =
 prop_encodedSDRInvariant :: ValidInt -> Bool
 prop_encodedSDRInvariant inn = maybe False checkSDREncodingInvariant (encode (c inn) (v inn))
 
+-------------------------------------
+--           UnitTests             --
+
+generateTestList :: ((a, Int) -> TH.Test) -> [a] -> [TH.Test]
+generateTestList f xs = fmap f (zip xs [0 ..])
+
+-- getStartOf <- computeStart
+
+startCases :: [(Natural, (Int, Int, Int, Int))]
+startCases =
+  [ (0, (-1, 1, -1, 1)),
+    (0, (0, 1, -1, 1)),
+    (0, (1, 1, -1, 1)),
+    (0, (-1, 2, -1, 1)),
+    (0, (0, 2, -1, 1)),
+    (1, (1, 2, -1, 1)),
+    (0, (0, 1, 0, 0)),
+    (0, (1, 2, 0, 0)),
+    (0, (1, 1, 0, 1)),
+    (0, (0, 2, 0, 1)),
+    (0, (1, 1, 0, 1)),
+    (1, (1, 2, 0, 1)),
+    (1, (1, 3, 0, 1))
+  ]
+
+---- TestCases
+generateTest :: ((Natural, (Int, Int, Int, Int)), Int) -> TH.Test
+generateTest ((t, (p1, p2, p3, p4)), casei) = TH.TestLabel testName test
+  where
+    dscp = printf "For computeStart %d %d %d %d," p1 p2 p3 p4
+    test = TH.TestCase (TH.assertEqual dscp t (computeStart p1 p2 p3 p4))
+    testName = printf "startTest%d" casei
+
+---- Testsuit
+startTestList :: [(Natural, (Int, Int, Int, Int))] -> [TH.Test]
+startTestList = generateTestList generateTest
+
+-- totNrOfBits <- computeTotalNumberOfBits
+
+casesTNB :: [(Natural, (Natural, Natural))]
+casesTNB =
+  [ (1, (1,1)),
+    (2, (1,2)),
+    (2, (2,1)),
+    (3,(1,3)),
+    (4,(2,3)),
+    (5,(3,3))
+  ]
+
+---- TestCases
+generateTestTNB :: ((Natural, (Natural, Natural)), Int) -> TH.Test
+generateTestTNB ((t, (p1, p2)), casei) = TH.TestLabel testName test
+  where
+    dscp = printf "For computeTotalNumberOfBits %d %d," p1 p2
+    test = TH.TestCase (TH.assertEqual dscp t (computeTotalNumberOfBits p1 p2))
+    testName = printf "TNBTest%d" casei
+
+---- Testsuit
+tnbTestList :: [(Natural, (Natural, Natural))] -> [TH.Test]
+tnbTestList = generateTestList generateTestTNB
+
+
+-- All Unit tests
+tests :: TH.Test
+tests = TH.TestList (startTestList startCases ++ tnbTestList casesTNB)
+
 --------------------------------------
 --           Run All tests          --
+
+---- Property based tests
 return [] -- Yikes!
 
 runTests :: IO Bool
 runTests = $quickCheckAll
+
+---- Unit tests
+runUnits :: IO TH.Counts
+runUnits = TH.runTestTT tests
 
 l = quickCheck prop_MaxValIsLargerOrEqualMinVal
 

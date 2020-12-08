@@ -17,7 +17,7 @@ module HTM.Encoder.Numeric where
 
 import Control.Lens (makeLenses, (^.))
 import GHC.Generics (Generic)
-import GHC.Natural (Natural, naturalToInt)
+import GHC.Natural (Natural, intToNatural, naturalToInt)
 import HTM.SDR (SDR (..), SDRRange (..))
 
 -- | Defined the type of Encoder
@@ -101,8 +101,19 @@ validInputValue c i = i <= c ^. maxVal && i >= c ^. minVal
 
 -- | Get the encoding start position of a value in the SDR.
 getStartOf :: Int -> EncoderConfig -> Natural
-getStartOf n config = floor $ realToFrac (naturalToInt (config ^. buckets) * (n - config ^. minVal)) / realToFrac (config ^. maxVal - config ^. minVal)
+getStartOf n config = computeStart n (naturalToInt (config ^. buckets)) (config ^. minVal) (config ^. maxVal)
+
+--floor $ realToFrac (naturalToInt (config ^. buckets) * (n - config ^. minVal)) / realToFrac (config ^. maxVal - config ^. minVal)
+
+computeStart :: Int -> Int -> Int -> Int -> Natural
+computeStart n buckets minVal maxVal 
+    | n > maxVal =  computeStart maxVal buckets minVal maxVal
+    | n < minVal =  computeStart minVal buckets minVal maxVal
+    | otherwise = intToNatural $ floor $ realToFrac (buckets * (n - minVal)) / realToFrac (maxVal + 1 - minVal)
 
 -- | The total number of bits used in a SDR.
 totNrBits :: EncoderConfig -> Natural
-totNrBits config = sum (map ($ config) [(^. buckets), (^. bitsPerBucket)]) - 1
+totNrBits config = computeTotalNumberOfBits (config ^. buckets) (config ^.bitsPerBucket)
+
+computeTotalNumberOfBits :: Natural -> Natural -> Natural
+computeTotalNumberOfBits buckets bitsPerBucket = buckets + bitsPerBucket - 1
