@@ -1,5 +1,4 @@
-# HTM-haskell 
-[![Build Status](https://travis-ci.org/fromSA/HTM-haskell.svg?branch=master)](https://travis-ci.org/fromSA/HTM-haskell)
+# HTM-haskell [![Build Status](https://travis-ci.org/fromSA/HTM-haskell.svg?branch=master)](https://travis-ci.org/fromSA/HTM-haskell)
 A Haskell implementation of the Hierarchical Temporal Memory algorithm by Numenta.
 
 ## Implementation milestone
