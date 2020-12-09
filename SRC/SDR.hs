@@ -4,8 +4,8 @@
 --{-# OPTIONS_HADDOCK hide, prune, ignore-exports #-}
 
 -- |
--- Module      : SDR
--- Description : An data type representing an SDR
+-- Module      : SRC.SDR
+-- Description : A record representing an SDR
 -- Copyright   : (c) Fromsa Hera, 2020
 -- License     : AGPL-3.0-or-later
 -- Maintainer  : fromsahera28@gmail.com

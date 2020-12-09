@@ -1,5 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+
+-- |
+-- Module      : SRC.Package
+-- Description : A record representing the configuration parameters and the inputdata
+-- Copyright   : (c) Fromsa Hera, 2020
+-- License     : AGPL-3.0-or-later
+-- Maintainer  : fromsahera28@gmail.com
+-- Stability   : experimental
+-- Portability : POSIX
+--
+-- This module contains a Package record that used by the HTM, Region and Encoder modules.
 module SRC.Package where
 
 import SRC.HTM.Config
@@ -19,8 +30,8 @@ data Package = Package
     _conS :: EncoderConfig,
     -- | The SDR encoding of the current value.
     _value :: SDR,
-    -- | And StdGen for generating random values. Should always be updated after use.
-    randomGenerator :: StdGen
+    -- | And StdGen for generating random values. Should always be updated after use. For future update.
+    _randomGenerator :: StdGen
   }
 
 -- | Lenses for HTMConfig, used to navigate the record.
