@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Testing.Encoder where
+module TEST.Encoder where
 
 import GHC.Generics (Generic)
 import GHC.Natural
