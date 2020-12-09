@@ -13,7 +13,10 @@ description:         A simulation of a region in a neocortex. The algorithm is d
                      2. https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/ The spatial pooler
                      3. https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf The temporal pooler
                      
-                     
+source-repository head
+  type: git
+  location: https://github.com/fromSA/HTM-haskell.git 
+    
 -- bug-reports:
 license:             AGPL-3.0-or-later
 license-file:        LICENSE
@@ -44,7 +47,9 @@ library
                       , SRC.CommonDataTypes
                       , SRC.Package
   --main-is:             Main.hs
-  --other-modules:       HTM, MovingAverage, Region, SDR
+  other-modules:      TEST.Encoder
+                      , TEST.MovingAverage
+                      , TEST.Region
   -- other-extensions:
   build-depends:      base >=4.13 && <=4.14
                       --, haskell-say ^>=1.0.0.0
@@ -60,5 +65,3 @@ library
 
   -- hs-source-dirs:
   default-language:    Haskell2010
-
-
