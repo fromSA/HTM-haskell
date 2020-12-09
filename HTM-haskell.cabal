@@ -32,10 +32,12 @@ tested-with: GHC ==8.6.4
 library
   exposed-modules:    REPL
                       , SRC.HTM.HTM
+                      , SRC.HTM.Config
                       , SRC.Region.Region
                       , SRC.Region.Model
                       , SRC.Region.Utils
                       , SRC.Region.Config
+                      , SRC.Encoder.Config
                       , SRC.Encoder.Numeric
                       , SRC.MovingAverage
                       , SRC.SDR
