@@ -23,8 +23,11 @@ maintainer:          Fromsa Hera, fromsahera28@gmail.com
 category:            Ariticial Intelligence
                      , Scientific Simulation
                      , Machine Learning
+homepage:     https://github.com/fromSA/HTM-haskell
+bug-reports:  https://github.com/fromSA/HTM-haskell/issues
 build-type:          Simple
 extra-source-files:  CHANGELOG.md, README.md
+tested-with: GHC ==8.6.4
 
 library
   exposed-modules:    REPL
@@ -42,7 +45,7 @@ library
   --other-modules:       HTM, MovingAverage, Region, SDR
   -- other-extensions:
   build-depends:      base >=4.13 && <4.14
-                      , haskell-say ^>=1.0.0.0
+                      --, haskell-say ^>=1.0.0.0
                       , random
                       , lens
                       , extra ^>=1.7.8
@@ -52,5 +55,8 @@ library
                       , generic-random
                       , quickcheck-instances
                       , HUnit
+
   -- hs-source-dirs:
   default-language:    Haskell2010
+
+
