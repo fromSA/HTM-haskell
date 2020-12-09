@@ -234,7 +234,7 @@ initConfigs = do
             _conR = r,
             _conS = s,
             _value = SDR [] a,
-            randomGenerator = mkStdGen 12
+            _randomGenerator = mkStdGen 12
           }
     Nothing -> exitFailure
 
