@@ -81,11 +81,11 @@ __initRegion p = Region
       { _currentStep = head regions,
         _previousStep = head . tail $ regions
       }
-      where 
+      where
         regions = replicate 2 region
         region = initAllDendrites p $ initColumns p-}
 
--- | Construct a new region. 
+-- | Construct a new region.
 -- This function returns an IO Region monad because it uses the StdRandom as a random generator.
 initRegion :: EncoderConfig -> RegionConfig -> IO Region
 initRegion conS conR = do

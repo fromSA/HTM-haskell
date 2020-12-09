@@ -30,7 +30,6 @@ where
 
 import Control.Lens
   ( element,
-    makeLenses,
     (%~),
     (&),
     (+~),
@@ -44,6 +43,8 @@ import Debug.Trace (traceShow, traceShowId)
 -- TODO remove
 import GHC.Natural (Natural, intToNatural, naturalToInt)
 import SRC.CommonDataTypes (Index')
+import SRC.Encoder.Numeric
+import SRC.HTM.Config
 import SRC.MovingAverage
   ( MovingAverage (..),
     average,
@@ -52,14 +53,11 @@ import SRC.MovingAverage
     on,
     window,
   )
+import SRC.Package
 import SRC.Region.Region
-import SRC.SDR (SDR, SDRRange (..), sdr, minIndex, maxIndex)
-import SRC.Encoder.Numeric
+import SRC.SDR (SDR, SDRRange (..), maxIndex, minIndex, sdr)
 import System.Random (newStdGen)
 import System.Random.Shuffle (shuffle')
-import SRC.Package
-import SRC.HTM.Config
-
 
 -- -------------------------------------------------------------
 --                           UPDATE
@@ -259,7 +257,7 @@ maintainSparcityPerSegment p pwc cell seg =
 
 -- | check is a cell is connected to a cell.
 connectedToSeg :: Segment -> Cell -> Bool
-connectedToSeg seg cell = foldl (\b x -> b || (x ^. source{-changed-}) == (cell ^. cellId)) False (seg ^. synapses)
+connectedToSeg seg cell = foldl (\b x -> b || (x ^. source {-changed-}) == (cell ^. cellId)) False (seg ^. synapses)
 
 -- | Activate all cells, learn on active segments and select a winner cell.
 -- If there is a best matching segment = @Sm@ then select its assosiated cell as the winner cell,
@@ -345,8 +343,7 @@ growSynapses p toCells toCell nrSynapses = do
   let len = length toCells
   let shuffledCells = if len > 0 then shuffle' toCells len gen else []
   let selectedWinnerCells = take nrSynapses' shuffledCells
-  return [newSynapse (p^.conR) toCell fromCell | fromCell <- selectedWinnerCells]
-
+  return [newSynapse (p ^. conR) toCell fromCell | fromCell <- selectedWinnerCells]
 
 -- | Collects cells from a list of columns. A cell is collected if meets the condition f.
 collectCells :: (Cell -> Bool) -> [Column] -> [Cell]
@@ -436,7 +433,7 @@ learnSynapse p prev syn =
     then syn & connectionStrength +~ p ^. conH . temporalConfig . permanenceIncrement
     else syn & connectionStrength -~ p ^. conH . temporalConfig . permanenceDecrement
   where
-    preCellState = getCell (syn ^. source{-changed-}) prev ^. cellState
+    preCellState = getCell (syn ^. source {-changed-}) prev ^. cellState
 
 --- Punich
 
@@ -464,7 +461,7 @@ punishSegment p prev seg =
 -- '_predictedDecrement' if a synapse is connected to an active cell
 punishSynapse :: Package -> [Column] -> Synapse -> Synapse
 punishSynapse p prev syn =
-  if ActiveCell == getCell (syn ^. source{-changed-}) prev ^. cellState
+  if ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState
     then syn & connectionStrength -~ p ^. conH . temporalConfig . predictedDecrement
     else syn
 
@@ -495,7 +492,7 @@ computeMatchingStrength p prev seg = seg & matchingStrength .~ sumOn' (intToNatu
 synapseIsActive :: Package -> [Column] -> Synapse -> Bool
 synapseIsActive p prev syn =
   syn ^. connectionStrength > p ^. conH . temporalConfig . connectedPermenance
-    && ActiveCell == getCell (syn ^. source{-changed-}) prev ^. cellState
+    && ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState
 
 -------------------------------
 --      Activate Segment     --

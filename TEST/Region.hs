@@ -171,12 +171,8 @@ chinRegion e c r =
 -------------------------------------
 --           Properties            --
 
---- getters, 
--- getcell, 
--- getRandomCell, 
--- selectRandomindecies, 
--- getRandomBetween
 
+-- TODO
 prop_getCell :: Region -> Bool
 prop_getCell r = True
 

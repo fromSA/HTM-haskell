@@ -2,8 +2,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module TEST.MovingAverage where
+
 import GHC.Generics (Generic)
-import GHC.Natural (naturalToInt, Natural)
+import GHC.Natural (Natural, naturalToInt)
 import SRC.MovingAverage
 import qualified Test.HUnit as TH
 import Test.QuickCheck
@@ -35,7 +36,6 @@ average
 
 -}
 
-
 data UpdateMovingAverage = UpdateMovingAverage
   { count :: Natural,
     m :: MovingAverage
@@ -46,30 +46,29 @@ instance Arbitrary MovingAverage where
   arbitrary = MovingAverage [] <$> arbitrary
 
 instance Arbitrary UpdateMovingAverage where
-  arbitrary = do 
-        i <- arbitrary :: Gen Natural
-        m <- arbitrary :: Gen MovingAverage
-        return $ UpdateMovingAverage i m
+  arbitrary = do
+    i <- arbitrary :: Gen Natural
+    m <- arbitrary :: Gen MovingAverage
+    return $ UpdateMovingAverage i m
 
 -------------------------------------
 --           Properties            --
 
 prop_On :: UpdateMovingAverage -> Bool
-prop_On ma 
-    | n == 0 = chinMovingAverage (m ma)
-    | otherwise = prop_On nm
-        where 
-            n = count ma 
-            nm = ma{ count = n- 1, m = on (m ma)}
+prop_On ma
+  | n == 0 = chinMovingAverage (m ma)
+  | otherwise = prop_On nm
+  where
+    n = count ma
+    nm = ma {count = n - 1, m = on (m ma)}
 
 prop_Off :: UpdateMovingAverage -> Bool
-prop_Off ma 
-    | n == 0 = chinMovingAverage (m ma)
-    | otherwise =  prop_On nm
-        where 
-            n = count ma 
-            nm = ma{ count = n-1, m = off (m ma)}
-
+prop_Off ma
+  | n == 0 = chinMovingAverage (m ma)
+  | otherwise = prop_On nm
+  where
+    n = count ma
+    nm = ma {count = n -1, m = off (m ma)}
 
 -------------------------------------
 --           Unit Tests            --
@@ -77,7 +76,7 @@ prop_Off ma
 generateTestList :: ((a, Int) -> TH.Test) -> [a] -> [TH.Test]
 generateTestList f xs = fmap f (zip xs [0 ..])
 
-generateTest :: ((Float, MovingAverage), Int) -> String -> String -> (MovingAverage -> Float)-> TH.Test
+generateTest :: ((Float, MovingAverage), Int) -> String -> String -> (MovingAverage -> Float) -> TH.Test
 generateTest ((expected, m), casei) dscp testName f = TH.TestLabel testName' test
   where
     dscp' = dscp ++ show m
