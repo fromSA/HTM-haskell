@@ -10,27 +10,17 @@
 -- Portability : POSIX
 --
 -- This module contains the configuration parameterer for the construction of a Region model.
-module HTM.Region.Config
-  ( MappingType (..),
-    RegionConfig (..),
-    nrOfCellsPerColumn,
-    nrOfColumns,
-    nrOfSynapsesPerSegment,
-    mappingType,
-    initConnectionStrength,
-    initNrOfFeedForwardSynpases,
-    mvWindow,
-  )
-where
+module SRC.Region.Config where
 
 import Control.Lens (makeLenses)
-import GHC.Natural ( Natural )
+import GHC.Natural (Natural)
 
 -- | Mapper between SDR and Region
-data MappingType = 
-    -- | Connect a column in a Region to constant subset of SDR bit indecies selected randomly.
+data MappingType
+  = -- | Connect a column in a Region to constant subset of SDR bit indecies selected randomly.
     Random
-    deriving(Show)
+  deriving (Show)
+
 -- -------------------------------------------------------------
 --                           CONFIG
 -- -------------------------------------------------------------
@@ -54,3 +44,15 @@ data RegionConfig = RegionConfig
   }
 
 makeLenses ''RegionConfig
+
+defualtRegionConfig :: RegionConfig
+defualtRegionConfig =
+  RegionConfig
+    { _nrOfColumns = 10,
+      _nrOfCellsPerColumn = 4,
+      _initNrOfFeedForwardSynpases = 8,
+      _nrOfSynapsesPerSegment = 10,
+      _mappingType = Random,
+      _initConnectionStrength = 0.6,
+      _mvWindow = 5
+    }

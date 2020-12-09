@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- |
@@ -11,7 +12,7 @@
 --
 -- This module is used to calculate a moving average. It comes with a record that contains the data
 -- and functions that produce some statistic on the data, like the moving average, moving percentage, etc.
-module HTM.MovingAverage
+module SRC.MovingAverage
   ( MovingAverage (..),
     Bit,
     window,
@@ -25,6 +26,7 @@ where
 
 import Control.Lens (makeLenses, (%~), (&), (^.))
 import GHC.Natural (Natural, intToNatural)
+import GHC.Generics (Generic)
 
 -- -------------------------------------------------------------
 --                           DATA
@@ -39,7 +41,7 @@ data MovingAverage = MovingAverage
     -- | The window size of the moving average
     _window :: Natural
   }
-  deriving (Show)
+  deriving (Show, Generic)
 
 makeLenses ''MovingAverage
 
@@ -93,7 +95,10 @@ off = prepend False
 -- >>> averagePercent $ MovingAverage{_bits=[False, True, True], _window=5}
 -- 0.4
 averagePercent :: MovingAverage -> Float
-averagePercent mva = fromIntegral (sumBits (mva ^. bits)) / fromIntegral (mva ^. window)
+averagePercent mva =  if w == 0 then 0 else c / w
+  where
+    c = fromIntegral (sumBits (mva ^. bits))
+    w = fromIntegral (mva ^. window)
 
 -- | Computes the average of the moving average.
 -- It only computes from the values already prepended and does not care about the '_window' size.
@@ -103,4 +108,7 @@ averagePercent mva = fromIntegral (sumBits (mva ^. bits)) / fromIntegral (mva ^.
 -- >>> average $ MovingAverage{_bits=[False, True, True], _window=5}
 -- 0.6666667
 average :: MovingAverage -> Float
-average mv = fromIntegral (sumBits (mv ^. bits)) / fromIntegral (length (mv ^. bits))
+average mv = if l == 0 then 0 else c / l
+  where
+    c = fromIntegral (sumBits (mv ^. bits))
+    l = fromIntegral (length (mv ^. bits))

@@ -1,5 +1,5 @@
 -- |
--- Module      : HTM
+-- Module      : 
 -- Description : Data type container
 -- Copyright   : (c) Fromsa Hera, 2020
 -- License     : AGPL-3.0-or-later
@@ -8,7 +8,8 @@
 -- Portability : POSIX
 --
 -- This module has contains the data types used by the other modules in HTM.
-module HTM.CommonDataTypes where
+module SRC.CommonDataTypes where
+
 
 import GHC.Natural (Natural)
 
@@ -17,3 +18,4 @@ type Index' = Natural
 
 -- | The index of a element
 type BitIndex = Index'
+

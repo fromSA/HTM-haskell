@@ -1,6 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
-
 -- |
 -- Module      : HTM
 -- Description : The Hierarchical temporal memory algorithm
@@ -18,10 +15,10 @@
 -- and [Temporal Pooler](https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf). In addition [this paper](https://arxiv.org/pdf/1601.06116.pdf) for the updating the 'boostingfactor'.
 -- Here is a longer description of this module, containing some
 -- commentary with @some markup@. TODO
-module HTM.HTM
-  ( module HTM.Region.Region,
-    module HTM.SDR,
-    module HTM.MovingAverage,
+module SRC.HTM.HTM
+  ( module SRC.Region.Region,
+    module SRC.SDR,
+    module SRC.MovingAverage,
     spatialPooler,
     temporalPooler,
     Package (..),
@@ -33,7 +30,6 @@ where
 
 import Control.Lens
   ( element,
-    makeLenses,
     (%~),
     (&),
     (+~),
@@ -46,8 +42,10 @@ import Data.List.Extra (sortOn, sumOn')
 import Debug.Trace (traceShow, traceShowId)
 -- TODO remove
 import GHC.Natural (Natural, intToNatural, naturalToInt)
-import HTM.CommonDataTypes (Index')
-import HTM.MovingAverage
+import SRC.CommonDataTypes (Index')
+import SRC.Encoder.Numeric
+import SRC.HTM.Config
+import SRC.MovingAverage
   ( MovingAverage (..),
     average,
     averagePercent,
@@ -55,83 +53,11 @@ import HTM.MovingAverage
     on,
     window,
   )
-import HTM.Region.Region
-import HTM.SDR (SDR, SDRRange (..), sdr, minIndex, maxIndex)
-import HTM.Encoder.Numeric
+import SRC.Package
+import SRC.Region.Region
+import SRC.SDR (SDR, SDRRange (..), maxIndex, minIndex, sdr)
 import System.Random (newStdGen)
 import System.Random.Shuffle (shuffle')
-
--- -------------------------------------------------------------
---                           CONFIG
--- -------------------------------------------------------------
-
--- | The parameters for the feedforward synapses that connect the inputField with a region and spatial algorithm.
-data SpatialConfig = SpatialConfig
-  { -- | The threshold for column activation. If the number of active bits in the inputfield of a column >= this threshold, then the column becomes active.
-    _overlapThreshold :: Natural,
-    -- | The minimum percent of active bits in inputField expected to have a overlap with a column.
-    _mop :: Float,
-    -- | The amount to decrease the connection strength of a synapses with for proximal synapses
-    _proxSynConInc :: Float,
-    -- | The amount to decrease the connection strength of a synapses with for proximal synapses
-    _proxSynConDec :: Float,
-    -- | A synapse with connection strength >= this threshold is considered permenantly connected.
-    _pConthresh :: Float,
-    -- | The desired column activity level within inhibition radius i.e. the number of columns that should be activated within the inhibition radius.
-    _colActLev :: Natural
-  }
-
-makeLenses ''SpatialConfig
-
--- | The parameters for the temporal algorithm.
-data TemporalConfig = TemporalConfig
-  { -- | The degree of change for the update of '_boost'. It is between 0 and 1.
-    _boostStrength :: Float,
-    -- | The desired percent of active duty cycle within the sliding window.
-    _targetDensity :: Float,
-    -- | The punishment strength, used to punish wrongly predicted segments.
-    _predictedDecrement :: Float,
-    -- | The forgetting strength, detrmines how fast a pattern is forgotten by the region.
-    _permanenceDecrement :: Float,
-    -- | The learning strength, determines how fast a pattern is learned by the region
-    _permanenceIncrement :: Float,
-    -- | The threshold of permenant synaptic connection. If a synapse has higher connection than this threshold and is connected to an active cell, then it is considered active.
-    _connectedPermenance :: Float,
-    -- | The threshold for when a cell is considered matching, i.e. when a segment has this many activeconnections to the previously active/winner cells.
-    _learningThreshold :: Natural,
-    -- | The number of synapses per segment that must be active for the segment to be considered active. should be less than nrOfSynapsesPerSegment of RegionConfig
-    _activationThreshold :: Natural,
-    -- | True if the temporalPooler should update the connectionstrengths of the synapses.
-    _learningEnabled :: Bool
-  }
-
-makeLenses ''TemporalConfig
-
--- | The configuration parameters for the HTM algorithm.
-data HTMConfig = HTMConfig
-  { -- | see 'SpatialConfig'
-    _spatialConfig :: SpatialConfig,
-    -- | see 'TemporalConfig'
-    _temporalConfig :: TemporalConfig
-  }
-
--- | Lenses for HTMConfig, used to navigate the record.
-makeLenses ''HTMConfig
-
--- | A package record containing the configaration parameters and the sdr for the current time step. This is used for the simplication of the function types.
-data Package = Package
-  { -- | The configuration parameters for the HTM algorithm.
-    _conH :: HTMConfig,
-    -- | The configuration parameters for a Region.
-    _conR :: RegionConfig,
-    -- | The configuration parameters for the SDR encoding.
-    _conS :: EncoderConfig,
-    -- | The SDR encoding of the current value.
-    _value :: SDR
-  }
-
--- | Lenses for HTMConfig, used to navigate the record.
-makeLenses ''Package
 
 -- -------------------------------------------------------------
 --                           UPDATE
@@ -331,7 +257,7 @@ maintainSparcityPerSegment p pwc cell seg =
 
 -- | check is a cell is connected to a cell.
 connectedToSeg :: Segment -> Cell -> Bool
-connectedToSeg seg cell = foldl (\b x -> b || (x ^. source{-changed-}) == (cell ^. cellId)) False (seg ^. synapses)
+connectedToSeg seg cell = foldl (\b x -> b || (x ^. source {-changed-}) == (cell ^. cellId)) False (seg ^. synapses)
 
 -- | Activate all cells, learn on active segments and select a winner cell.
 -- If there is a best matching segment = @Sm@ then select its assosiated cell as the winner cell,
@@ -417,8 +343,7 @@ growSynapses p toCells toCell nrSynapses = do
   let len = length toCells
   let shuffledCells = if len > 0 then shuffle' toCells len gen else []
   let selectedWinnerCells = take nrSynapses' shuffledCells
-  return [newSynapse (p^.conR) toCell fromCell | fromCell <- selectedWinnerCells]
-
+  return [newSynapse (p ^. conR) toCell fromCell | fromCell <- selectedWinnerCells]
 
 -- | Collects cells from a list of columns. A cell is collected if meets the condition f.
 collectCells :: (Cell -> Bool) -> [Column] -> [Cell]
@@ -508,7 +433,7 @@ learnSynapse p prev syn =
     then syn & connectionStrength +~ p ^. conH . temporalConfig . permanenceIncrement
     else syn & connectionStrength -~ p ^. conH . temporalConfig . permanenceDecrement
   where
-    preCellState = getCell (syn ^. source{-changed-}) prev ^. cellState
+    preCellState = getCell (syn ^. source {-changed-}) prev ^. cellState
 
 --- Punich
 
@@ -536,7 +461,7 @@ punishSegment p prev seg =
 -- '_predictedDecrement' if a synapse is connected to an active cell
 punishSynapse :: Package -> [Column] -> Synapse -> Synapse
 punishSynapse p prev syn =
-  if ActiveCell == getCell (syn ^. source{-changed-}) prev ^. cellState
+  if ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState
     then syn & connectionStrength -~ p ^. conH . temporalConfig . predictedDecrement
     else syn
 
@@ -567,7 +492,7 @@ computeMatchingStrength p prev seg = seg & matchingStrength .~ sumOn' (intToNatu
 synapseIsActive :: Package -> [Column] -> Synapse -> Bool
 synapseIsActive p prev syn =
   syn ^. connectionStrength > p ^. conH . temporalConfig . connectedPermenance
-    && ActiveCell == getCell (syn ^. source{-changed-}) prev ^. cellState
+    && ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState
 
 -------------------------------
 --      Activate Segment     --

@@ -13,7 +13,10 @@ description:         A simulation of a region in a neocortex. The algorithm is d
                      2. https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/ The spatial pooler
                      3. https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf The temporal pooler
                      
-                     
+source-repository head
+  type: git
+  location: https://github.com/fromSA/HTM-haskell.git 
+    
 -- bug-reports:
 license:             AGPL-3.0-or-later
 license-file:        LICENSE
@@ -23,25 +26,33 @@ maintainer:          Fromsa Hera, fromsahera28@gmail.com
 category:            Ariticial Intelligence
                      , Scientific Simulation
                      , Machine Learning
+homepage:     https://github.com/fromSA/HTM-haskell
+bug-reports:  https://github.com/fromSA/HTM-haskell/issues
 build-type:          Simple
 extra-source-files:  CHANGELOG.md, README.md
+tested-with: GHC ==8.6.4
 
 library
   exposed-modules:    REPL
-                      , HTM.HTM
-                      , HTM.Region.Region
-                      , HTM.Region.Model
-                      , HTM.Region.Utils
-                      , HTM.Region.Config
-                      , HTM.Encoder.Numeric
-                      , HTM.MovingAverage
-                      , HTM.SDR
-                      , HTM.CommonDataTypes
+                      , SRC.HTM.HTM
+                      , SRC.HTM.Config
+                      , SRC.Region.Region
+                      , SRC.Region.Model
+                      , SRC.Region.Utils
+                      , SRC.Region.Config
+                      , SRC.Encoder.Config
+                      , SRC.Encoder.Numeric
+                      , SRC.MovingAverage
+                      , SRC.SDR
+                      , SRC.CommonDataTypes
+                      , SRC.Package
   --main-is:             Main.hs
-  --other-modules:       HTM, MovingAverage, Region, SDR
+  other-modules:      TEST.Encoder
+                      , TEST.MovingAverage
+                      , TEST.Region
   -- other-extensions:
-  build-depends:      base >=4.13 && <4.14
-                      , haskell-say ^>=1.0.0.0
+  build-depends:      base >=4.13 && <=4.14
+                      --, haskell-say ^>=1.0.0.0
                       , random
                       , lens
                       , extra ^>=1.7.8
@@ -51,5 +62,6 @@ library
                       , generic-random
                       , quickcheck-instances
                       , HUnit
+
   -- hs-source-dirs:
   default-language:    Haskell2010
