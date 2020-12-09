@@ -9,7 +9,7 @@
 --
 -- Given a 'HTM.Region.Config', this module provides functions for constructing a region.
 -- It also provides functions for accessing and modifing the region.
-module HTM.Region.Utils
+module SRC.Region.Utils
   ( initRegion,
     getRandomCell,
     getCell,
@@ -20,12 +20,13 @@ where
 import Control.Lens ((^.))
 import Debug.Trace ()
 import GHC.Natural (Natural, intToNatural, naturalToInt)
-import HTM.CommonDataTypes (BitIndex)
-import HTM.Encoder.Numeric (EncoderConfig, getRange)
-import HTM.MovingAverage (MovingAverage (..))
-import HTM.Region.Config
-import HTM.Region.Model
-import HTM.SDR
+import SRC.CommonDataTypes (BitIndex)
+import SRC.Encoder.Config
+import SRC.Encoder.Numeric (getRange)
+import SRC.MovingAverage (MovingAverage (..))
+import SRC.Region.Config
+import SRC.Region.Model
+import SRC.SDR
 import System.Random (Random (randomR), getStdRandom)
 
 -- -------------------------------------------------------------
@@ -74,6 +75,15 @@ getRandomIndexBetween mi ma = do
 -- -------------------------------------------------------------
 --                           INITILIZE
 -- -------------------------------------------------------------
+
+{-__initRegion :: Package -> Region
+__initRegion p = Region
+      { _currentStep = head regions,
+        _previousStep = head . tail $ regions
+      }
+      where 
+        regions = replicate 2 region
+        region = initAllDendrites p $ initColumns p-}
 
 -- | Construct a new region. 
 -- This function returns an IO Region monad because it uses the StdRandom as a random generator.
@@ -210,7 +220,7 @@ _INIT_BOOST = 1
 
 -- | A constant value, represents the initial radius of a columns neighbourhood.
 _INIT_RAD :: Num a => a
-_INIT_RAD = 2
+_INIT_RAD = 5
 
 -- | A constant value, represents the initial value of a columns overlap score.
 _INIT_OVERLAP :: Num a => a

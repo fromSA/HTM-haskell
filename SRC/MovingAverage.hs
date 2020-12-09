@@ -11,7 +11,7 @@
 --
 -- This module is used to calculate a moving average. It comes with a record that contains the data
 -- and functions that produce some statistic on the data, like the moving average, moving percentage, etc.
-module HTM.MovingAverage
+module SRC.MovingAverage
   ( MovingAverage (..),
     Bit,
     window,

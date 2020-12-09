@@ -19,13 +19,15 @@ module REPL where
 import Control.Lens ((^.))
 import Debug.Trace ()
 import GHC.Natural (Natural, intToNatural)
-import HTM.Encoder.Numeric
-import HTM.HTM
-import HTM.SDR
-import System.Random ()
+import SRC.Encoder.Numeric
+    ( encode, getRange)
+import SRC.Encoder.Config
+import SRC.HTM.HTM
+import SRC.SDR
+import System.Random (mkStdGen)
 import System.Random.Shuffle ()
 import Data.Char (isSpace)
-import System.Exit (exitSuccess)
+import System.Exit (exitSuccess, exitFailure)
 
 {- TODO
 
@@ -188,7 +190,7 @@ compute' :: Package -> Region -> IO ()
 compute' p region = do
   -- TODO read in value -> encode or break -> 
   x <- chooseNum "HTM << value: " Nothing Nothing
-  let encodedSDR = encode x (_conS p)
+  let encodedSDR = encode (_conS p) x 
   case encodedSDR of
     Just val ->
       do
@@ -222,15 +224,19 @@ initConfigs :: IO Package
 initConfigs = do
   putStrLn "Lets configer the model"
   s <- initEncoderCon
-  r <- initRegionCon s
-  h <- initHTMCon r
-  return $
-    Package
-      { _conH = h,
-        _conR = r,
-        _conS = s,
-        _value = SDR [] $ getRange s
-      }
+  case getRange s of 
+    Just a -> do
+      r <- initRegionCon s
+      h <- initHTMCon r
+      return $
+        Package
+          { _conH = h,
+            _conR = r,
+            _conS = s,
+            _value = SDR [] a,
+            randomGenerator = mkStdGen 12
+          }
+    Nothing -> exitFailure
 
 
 data InputState a = Break | WrongInput | NoInput | Success a
@@ -288,26 +294,29 @@ chooseNum msg a b = do
         _ -> chooseNum msg a b
 
 initRegionCon :: EncoderConfig -> IO RegionConfig
-initRegionCon e = do
-  putStrLn "\n\n>>> Region configuration:"
-  initNrOfFeedForwardSynpases_ <- chooseNum "initNrOfFeedFarwardSynapses: Maximum number of input bits connected to a column" (Just 0) (Just (getRange e ^.maxIndex))
-  nrOfColumns_ <- chooseNum "nrOfColumns: Number of columns" (Just 0) Nothing
-  nrOfCellsPerColumn_ <- chooseNum "nrOfCellsPerColumn: Number of cells per column" (Just 0) Nothing
-  nrOfSynapsesPerSegment_ <- chooseNum "nrOfSynapsesPerSegment: Number of synapses per segment" (Just 0) Nothing
-  initConnectionStrength_ <- chooseNum "initConnectionStrength: The initial connection strength of a synapse" (Just (0.0 :: Float)) Nothing
-  mvWindow_ <- chooseNum "mvWindow: Moving average window size" (Just 0) Nothing
-  mappingType_ <- chooseType "mappingType: MappingType between inputspace and Region" [(Random, "Randomly connect inputbits to columns")]
+initRegionCon e = 
+  case getRange e of 
+    Just a -> do
+      putStrLn "\n\n>>> Region configuration:"
+      initNrOfFeedForwardSynpases_ <- chooseNum "initNrOfFeedFarwardSynapses: Maximum number of input bits connected to a column" (Just 0) (Just (a ^. maxIndex))
+      nrOfColumns_ <- chooseNum "nrOfColumns: Number of columns" (Just 0) Nothing
+      nrOfCellsPerColumn_ <- chooseNum "nrOfCellsPerColumn: Number of cells per column" (Just 0) Nothing
+      nrOfSynapsesPerSegment_ <- chooseNum "nrOfSynapsesPerSegment: Number of synapses per segment" (Just 0) Nothing
+      initConnectionStrength_ <- chooseNum "initConnectionStrength: The initial connection strength of a synapse" (Just (0.0 :: Float)) Nothing
+      mvWindow_ <- chooseNum "mvWindow: Moving average window size" (Just 0) Nothing
+      mappingType_ <- chooseType "mappingType: MappingType between inputspace and Region" [(Random, "Randomly connect inputbits to columns")]
 
-  return $
-    RegionConfig
-      { _nrOfColumns = nrOfColumns_,
-        _nrOfCellsPerColumn = nrOfCellsPerColumn_,
-        _initNrOfFeedForwardSynpases = initNrOfFeedForwardSynpases_,
-        _nrOfSynapsesPerSegment = nrOfSynapsesPerSegment_,
-        _mappingType = mappingType_,
-        _initConnectionStrength = initConnectionStrength_,
-        _mvWindow = mvWindow_
-      }
+      return $
+        RegionConfig
+          { _nrOfColumns = nrOfColumns_,
+            _nrOfCellsPerColumn = nrOfCellsPerColumn_,
+            _initNrOfFeedForwardSynpases = initNrOfFeedForwardSynpases_,
+            _nrOfSynapsesPerSegment = nrOfSynapsesPerSegment_,
+            _mappingType = mappingType_,
+            _initConnectionStrength = initConnectionStrength_,
+            _mvWindow = mvWindow_
+          }
+    Nothing -> exitFailure
 
 initHTMCon :: RegionConfig -> IO HTMConfig
 initHTMCon r = do
@@ -396,3 +405,7 @@ chooseType param xs = do
       case state of
         Success m -> return $ fst $ xs !! m
         _ -> chooseType' xs
+
+
+
+

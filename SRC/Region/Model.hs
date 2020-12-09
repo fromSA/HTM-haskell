@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- |
 -- Module      : Region
@@ -14,15 +15,16 @@
 -- A Region consists of columns which in turn consists of cells.
 -- A cell consists of dendrites which in turn consists of segments.
 -- A Segment is a collection of synsapses that recieve input from other cells in the region.
-module HTM.Region.Model where
+module SRC.Region.Model where
 
 import Control.Lens(makeLenses,(^.))
 import Data.List (intercalate)
 import Debug.Trace ()
 import GHC.Natural ( Natural, intToNatural, naturalToInt )
-import HTM.CommonDataTypes ( BitIndex, Index' )
-import HTM.MovingAverage ( MovingAverage(..) )
+import SRC.CommonDataTypes ( BitIndex, Index' )
+import SRC.MovingAverage ( MovingAverage(..) )
 import System.Random ( getStdRandom, Random(randomR) )
+import GHC.Generics (Generic)
 
 -- -------------------------------------------------------------
 --                           CONSTANTS
@@ -53,7 +55,7 @@ _MATCHING_STATE = "m"
 -- -------------------------------------------------------------
 
 -- | Represent the indentity of a dendrite with in the list of dendrites it is contained in.
-type DendriteIndex = Index'
+type DendriteIndex = Index' 
 
 -- | Represent the indentity of a segment with in the list of segments it is contained in.
 type SegmentIndex = Index'
@@ -74,7 +76,7 @@ data ColumnState
     ActiveColumn
   | -- | A column is inactive if it is not connected to enough active SDR bits.
     InActiveColumn
-  deriving (Eq)
+  deriving (Eq, Generic)
 
 instance Show ColumnState where
   show ActiveColumn = _ACTIVE_STATE
@@ -90,7 +92,7 @@ data CellState
     ActivePredictiveCell
   | -- | A cell is inactive if it is neither active nor predicted.
     InActiveCell
-  deriving (Eq)
+  deriving (Eq,Generic)
 
 instance Show CellState where
   show ActiveCell = _ACTIVE_STATE
@@ -106,7 +108,7 @@ data SegmentState
     MatchingSegment
   | -- | A segment is inactive if it is neither 'ActiveSegment' nor 'MatchingSegment'.
     InActiveSegment
-  deriving (Eq)
+  deriving (Eq, Generic)
 
 instance Show SegmentState where
   show ActiveSegment = _ACTIVE_STATE
@@ -121,7 +123,7 @@ data CellID = CellID
     -- | The index of a column within a column. Multiple cells with have the same `_cell` index, bacause it is relative.
     _cell :: CellIndex
   }
-  deriving (Eq,Show)
+  deriving (Eq,Show, Generic)
 
 makeLenses ''CellID
 
@@ -135,7 +137,7 @@ data Synapse = Synapse
     -- | The connection strength between the source and destination
     _connectionStrength :: ConnectionStrength
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show,Generic)
 
 makeLenses ''Synapse
 
@@ -148,7 +150,7 @@ data Segment = Segment
     -- | The number of synpases permenantly connected to active cells.
     _matchingStrength :: Natural
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 makeLenses ''Segment
 
@@ -167,7 +169,7 @@ data Cell = Cell
     -- It was predicted, or it is the cell with the best matching segment or it is the least used cell within a bursting column.
     _isWinner :: Bool
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 makeLenses ''Cell
 
@@ -178,7 +180,7 @@ data FeedForwardSynapse = FeedForwardSynapse
     -- | The connection strength of this synapse.
     _conStr :: ConnectionStrength
   }
-  deriving (Eq)
+  deriving (Eq, Generic)
 
 makeLenses ''FeedForwardSynapse
 
@@ -210,7 +212,7 @@ data Column = Column
     -- | Overlap duty cycle. The moving average rate of how often this column had bigger overlap with input field than the activation threshold
     _odc :: MovingAverage
   }
-  deriving ()
+  deriving (Generic)
 
 makeLenses ''Column
 
@@ -221,7 +223,7 @@ data Region = Region
     _currentStep :: [Column],
     -- | The columns in the previous time step, used by the temporal algorithm of the HTM algorthm.
     _previousStep :: [Column]
-  }
+  } deriving (Generic)
 
 makeLenses ''Region
 

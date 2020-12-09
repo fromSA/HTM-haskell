@@ -8,12 +8,13 @@
 -- Portability : POSIX
 --
 -- This is the main API for a region data type.
-module HTM.Region.Region(
-    module HTM.Region.Config,
-    module HTM.Region.Model,
-    module HTM.Region.Utils
-) where
+module SRC.Region.Region
+  ( module SRC.Region.Config,
+    module SRC.Region.Model,
+    module SRC.Region.Utils,
+  )
+where
 
-import HTM.Region.Utils 
-import HTM.Region.Model 
-import HTM.Region.Config
+import SRC.Region.Config
+import SRC.Region.Model
+import SRC.Region.Utils

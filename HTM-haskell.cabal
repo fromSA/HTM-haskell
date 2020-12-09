@@ -28,15 +28,16 @@ extra-source-files:  CHANGELOG.md, README.md
 
 library
   exposed-modules:    REPL
-                      , HTM.HTM
-                      , HTM.Region.Region
-                      , HTM.Region.Model
-                      , HTM.Region.Utils
-                      , HTM.Region.Config
-                      , HTM.Encoder.Numeric
-                      , HTM.MovingAverage
-                      , HTM.SDR
-                      , HTM.CommonDataTypes
+                      , SRC.HTM.HTM
+                      , SRC.Region.Region
+                      , SRC.Region.Model
+                      , SRC.Region.Utils
+                      , SRC.Region.Config
+                      , SRC.Encoder.Numeric
+                      , SRC.MovingAverage
+                      , SRC.SDR
+                      , SRC.CommonDataTypes
+                      , SRC.Package
   --main-is:             Main.hs
   --other-modules:       HTM, MovingAverage, Region, SDR
   -- other-extensions:
