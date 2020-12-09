@@ -166,25 +166,7 @@ chinRegion e c r =
 -------------------------------------
 --           Arbitraries           --
 
-instance Arbitrary EncoderConfig where
-    arbitrary = return defualtEncoderConfig
-
-instance Arbitrary RegionConfig where
-    arbitrary = return defualtRegionConfig
-
-instance Arbitrary Region where
-    arbitrary = do
-        int <- arbitrary :: Gen Int
-        let stdGen = mkStdGen int
-        let (a,stdGen2) = randomR (1,5) stdGen
-        let (b,_) = randomR (1,5) stdGen2
-        encoderConfig  <-  arbitrary :: Gen EncoderConfig
-        regionConfig <- arbitrary :: Gen RegionConfig
-
-        --return =<< initRegion encoderConfig regionConfig
-
         
-
 
 -------------------------------------
 --           Properties            --
@@ -197,8 +179,6 @@ instance Arbitrary Region where
 
 prop_getCell :: Region -> Bool
 prop_getCell r = True
-
-k = generate (arbitrary :: Gen Numm)
 
 --------------------------------------
 --           Run All tests          --

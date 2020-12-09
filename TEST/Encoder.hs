@@ -6,8 +6,8 @@ module Testing.Encoder where
 import GHC.Generics (Generic)
 import GHC.Natural
 import Generic.Random
-import HTM.Encoder.Numeric
-import HTM.SDR
+import SRC.Encoder.Numeric
+import SRC.SDR
 import System.Random
 import qualified Test.HUnit as TH
 import Test.QuickCheck
@@ -15,6 +15,7 @@ import Test.QuickCheck.All ()
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Instances ()
 import Text.Printf
+import SRC.Encoder.Config
 
 -------------------------------------
 --           Arbitraries           --
