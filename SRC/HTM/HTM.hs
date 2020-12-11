@@ -124,7 +124,7 @@ neighbors' at rad = take rad' . drop (at' - (rad' `div` 2))
 
 -- | Returns k columns with the highest overlapscore from a list of columns.
 kmaxOverlap :: Natural -> [Column] -> [Column]
-kmaxOverlap k cols = take k' $ sortOn _overlap cols -- TODO double check
+kmaxOverlap k cols = take k' $ sortOn _overlap cols -- TODO test
   where
     k' = naturalToInt k
 
@@ -143,12 +143,12 @@ learn p = map (updateBoost p . learnCol p) -- TODO might be a problem if the con
 
 -- | Update the connection strength of synapses within a region
 learnCol p col
-  | col ^. columnState == ActiveColumn = col & inputField %~ map (activateSynapse p)
+  | col ^. columnState == ActiveColumn = col & inputField %~ map (learnFeedForwardSynapse p)
   | otherwise = col
 
 -- | Activate a synapse if is connected to and active SDR bit.
-activateSynapse :: Package -> FeedForwardSynapse -> FeedForwardSynapse
-activateSynapse p syn =
+learnFeedForwardSynapse :: Package -> FeedForwardSynapse -> FeedForwardSynapse
+learnFeedForwardSynapse p syn =
   if synapseIsActive
     then syn & conStr %~ min 1 . (+ p ^. conH . spatialConfig . proxSynConInc)
     else syn & conStr %~ max 0 . subtract (p ^. conH . spatialConfig . proxSynConDec)
