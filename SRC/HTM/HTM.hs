@@ -21,10 +21,6 @@ module SRC.HTM.HTM
     module SRC.MovingAverage,
     spatialPooler,
     temporalPooler,
-    Package (..),
-    HTMConfig (..),
-    TemporalConfig (..),
-    SpatialConfig (..),
   )
 where
 
@@ -48,7 +44,7 @@ import SRC.HTM.Config
 import SRC.MovingAverage
   ( MovingAverage (..),
     average,
-    averagePercent,
+    sparsity,
     off,
     on,
     window,
@@ -66,6 +62,8 @@ import System.Random.Shuffle (shuffle')
 {--------------------------------------------------------------
                            SpatialPooler
 ---------------------------------------------------------------}
+
+-- $Spatial pooler
 
 -- | The spatial pooler, used to spatially encode an input SDR on a Region.
 spatialPooler :: Package -> Region -> Region
@@ -162,7 +160,7 @@ updateBoost p = updateBoostFactor p . checkAvgOverlap p
 
 -- | update the connectionstrength of the proximal synapses for a column based on its moving average overlap score.
 checkAvgOverlap p col =
-  if averagePercent (col ^. odc) < (p ^. conH . spatialConfig . mop)
+  if sparsity (col ^. odc) < (p ^. conH . spatialConfig . mop)
     then col & (inputField . traverse . conStr) %~ (min 1 . (+ 0.1 {- arbitrary value, should be a parameter.-} * p ^. conH . spatialConfig . pConthresh))
     else col
 
@@ -177,6 +175,7 @@ updateBoostFactor p col = col & boost %~ (boostFactor *)
 {--------------------------------------------------------------
                            Temporal Pooler
 ---------------------------------------------------------------}
+-- $Temporal pooler
 
 -- | Puts the region passed from the spatial pooler in the context of the previous region,
 --  then predicts the next possible next input encoding.

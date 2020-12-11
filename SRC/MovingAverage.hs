@@ -20,7 +20,7 @@ module SRC.MovingAverage
     on,
     off,
     average,
-    averagePercent
+    sparsity
   )
 where
 
@@ -92,10 +92,10 @@ off = prepend False
 --
 -- prop> = nr of on bits / _window
 -- 
--- >>> averagePercent $ MovingAverage{_bits=[False, True, True], _window=5}
+-- >>> sparsity $ MovingAverage{_bits=[False, True, True], _window=5}
 -- 0.4
-averagePercent :: MovingAverage -> Float
-averagePercent mva =  if w == 0 then 0 else c / w
+sparsity :: MovingAverage -> Float
+sparsity mva =  if w == 0 then 0 else c / w
   where
     c = fromIntegral (sumBits (mva ^. bits))
     w = fromIntegral (mva ^. window)

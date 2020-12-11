@@ -31,7 +31,7 @@ sumBits
 on
 off
 
-averagePercent
+sparsity
 average
 
 -}
@@ -99,7 +99,7 @@ percentCases =
 
 ---- TestCases
 generatePercentTest :: ((Float, MovingAverage), Int) -> TH.Test
-generatePercentTest a = generateTest a "For averagePercent of " "percentageTest" averagePercent
+generatePercentTest a = generateTest a "For sparsity of " "percentageTest" sparsity
 
 ---- Testsuit
 percentTestList :: [(Float, MovingAverage)] -> [TH.Test]
