@@ -14,6 +14,7 @@ module SRC.Region.Utils
     getRandomCell,
     getCell,
     newSynapse,
+    displayRegion
   )
 where
 
@@ -28,6 +29,7 @@ import SRC.Region.Config
 import SRC.Region.Model
 import SRC.SDR
 import System.Random (Random (randomR), getStdRandom)
+import Data.List (intercalate)
 
 -- -------------------------------------------------------------
 --                           GETTER
@@ -76,15 +78,6 @@ getRandomIndexBetween mi ma = do
 --                           INITILIZE
 -- -------------------------------------------------------------
 
-{-__initRegion :: Package -> Region
-__initRegion p = Region
-      { _currentStep = head regions,
-        _previousStep = head . tail $ regions
-      }
-      where
-        regions = replicate 2 region
-        region = initAllDendrites p $ initColumns p-}
-
 -- | Construct a new region.
 -- This function returns an IO Region monad because it uses the StdRandom as a random generator.
 initRegion :: EncoderConfig -> RegionConfig -> IO Region
@@ -115,7 +108,7 @@ initsingleColumn conS conR columnIndex = do
             _columnState = InActiveColumn,
             _boost = _INIT_BOOST, -- should maybe be Float
             _overlap = _INIT_OVERLAP,
-            _inhibRad = _INIT_RAD -- how to select!
+            _inhibRad = conR ^. initRad
           }
   return c
 
@@ -218,10 +211,27 @@ _START_INDEX = 0
 _INIT_BOOST :: Num a => a
 _INIT_BOOST = 1
 
--- | A constant value, represents the initial radius of a columns neighbourhood.
-_INIT_RAD :: Num a => a
-_INIT_RAD = 5
-
 -- | A constant value, represents the initial value of a columns overlap score.
 _INIT_OVERLAP :: Num a => a
 _INIT_OVERLAP = 0
+
+
+-- -------------------------------------------------------------
+--                           VIEW
+-- -------------------------------------------------------------
+
+-- | Displays active columns in this format `| ColumnId : cellStates`
+displayRegion :: Region -> String
+displayRegion r = "ActiveColumns = " ++ displayColumns (r ^. currentStep) -- ++ "\nP: " ++ displayColumns (r ^. previousStep)
+
+displayColumns ::  [Column] -> String
+displayColumns c = intercalate "|" $ filter (not . null) $ map displayColumn c
+  
+displayColumn :: Column -> String 
+displayColumn c = 
+  case c^.columnState of 
+    ActiveColumn -> "" ++ show (c^.columnId) ++ ":" ++ intercalate "" (map displayCell $ _cells c)  ++ ""
+    _ -> ""
+
+displayCell :: Cell -> String 
+displayCell c = show (c^.cellState)  
