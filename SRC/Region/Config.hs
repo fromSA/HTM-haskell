@@ -40,7 +40,10 @@ data RegionConfig = RegionConfig
     -- | The connection strength of synapses between cells in a region.
     _initConnectionStrength :: Float,
     -- | The size of the window of the moving average, used in overlap and active duty cycle.
-    _mvWindow :: Natural
+    _mvWindow :: Natural,
+    -- | A constant value, represents the initial radius of a columns neighbourhood.
+    _initRad :: Natural
+
   }
 
 makeLenses ''RegionConfig
@@ -54,5 +57,6 @@ defualtRegionConfig =
       _nrOfSynapsesPerSegment = 10,
       _mappingType = Random,
       _initConnectionStrength = 0.6,
-      _mvWindow = 5
+      _mvWindow = 5,
+      _initRad = 5
     }

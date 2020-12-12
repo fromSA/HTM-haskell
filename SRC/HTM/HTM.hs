@@ -21,6 +21,7 @@ module SRC.HTM.HTM
     module SRC.MovingAverage,
     spatialPooler,
     temporalPooler,
+    switch
   )
 where
 
@@ -67,10 +68,13 @@ import System.Random.Shuffle (shuffle')
 
 -- | The spatial pooler, used to spatially encode an input SDR on a Region.
 spatialPooler :: Package -> Region -> Region
-spatialPooler p r = r & currentStep %~ (learn p . updateInhibition p . updateOverlap p)
+spatialPooler p r = r & currentStep %~ (learn p . updateInhibition p . updateOverlap p . clearColumnState)
 
 learn, updateInhibition, updateOverlap :: Package -> [Column] -> [Column]
 computeOverlap, learnCol, updateBoost, updateBoostFactor, checkAvgOverlap :: Package -> Column -> Column
+
+clearColumnState :: [Column] -> [Column]
+clearColumnState = map (\x -> x & columnState .~ InActiveColumn)
 
 ---------------------
 -- COMPUTE OVERLAP --
@@ -79,11 +83,11 @@ computeOverlap, learnCol, updateBoost, updateBoostFactor, checkAvgOverlap :: Pac
 -- | Updates the overlap score of all columns.
 updateOverlap p = map (computeOverlap p)
 
--- | Updates the overlap score of a column
+-- | Updates the overlap score of a column, also boosts the score 
+-- based of the boostfactor computed from mop at previous iteration
 computeOverlap p c =
-  if overlapScore >= p ^. conH . spatialConfig . overlapThreshold
+  if overlapScore < p ^. conH . spatialConfig . overlapThreshold
     then -- boost the overlap score, based on the '_boost' factor at the previous iteration.
-
       c & overlap .~ floor (c ^. boost * fromIntegral overlapScore)
         & odc %~ on
     else
@@ -93,9 +97,9 @@ computeOverlap p c =
     -- Counts the how many synapses in the inputfield of a column are active
     overlapScore = intToNatural $ sum $ map (fromEnum . isColumnActive p) (c ^. inputField)
 
--- | Choose if a column is active or not based on if
---  the connection strength of the Synapse to the input space is larger than
---  the activation threshold
+-- | Choose if a column is active or not based on 
+-- if the connection strength of the Synapse to the input space is larger 
+-- than the activation threshold
 isColumnActive :: Package -> FeedForwardSynapse -> Bool
 isColumnActive p syn = syn ^. conStr >= p ^. conH . spatialConfig . pConthresh && syn ^. ind `elem` p ^. value . sdr
 
@@ -106,10 +110,12 @@ isColumnActive p syn = syn ^. conStr >= p ^. conH . spatialConfig . pConthresh &
 -- | Inhibit columns that do not have an overlap score among the k highest
 updateInhibition p columns = map (maybeActivateColumn p columns) columns
 
--- | A Column is activated if the it is one the k columns with the  highest activaiton function.
+-- | A Column is activated if the it is one the k columns in its neighborhood with the highest activaiton function.
 maybeActivateColumn :: Package -> [Column] -> Column -> Column
 maybeActivateColumn p cols col =
-  maybeActivate col . kmaxOverlap (p ^. conH . spatialConfig . colActLev) $ neighbors col cols
+  if col ^. overlap >= p ^. conH . spatialConfig . overlapThreshold
+    then maybeActivate col . kmaxOverlap (p ^. conH . spatialConfig . colActLev) $ neighbors col cols
+    else col & columnState .~ InActiveColumn & adc %~ off
 
 -- | Returns the neighbors of column within a radius. The radius is clipped if the column is at the edge of the region. -- TODO perhaps use a rotational way?
 neighbors :: Column -> [Column] -> [Column]
@@ -124,14 +130,15 @@ neighbors' at rad = take rad' . drop (at' - (rad' `div` 2))
 
 -- | Returns k columns with the highest overlapscore from a list of columns.
 kmaxOverlap :: Natural -> [Column] -> [Column]
-kmaxOverlap k cols = take k' $ sortOn _overlap cols -- TODO test
+kmaxOverlap k cols = drop (length l - k') l  -- TODO test
   where
     k' = naturalToInt k
+    l = sortOn _overlap cols
 
 -- | Activate a column if it is in a list of columns, else Inactivate it.
 maybeActivate :: Column -> [Column] -> Column
 maybeActivate col cols
-  | col `elem` cols = col & columnState .~ ActiveColumn & adc %~ on
+  | col `elem` cols  = col & columnState .~ ActiveColumn & adc %~ on
   | otherwise = col & columnState .~ InActiveColumn & adc %~ off
 
 ---------------------
@@ -183,7 +190,7 @@ temporalPooler :: Package -> Region -> IO Region
 temporalPooler p r = do
   a <- addContext p r
   let b = predict p a
-  return $ switch b
+  return b -- switch b
 
 --------------------------------------------------------------
 --                           ADD CONTEXT
@@ -443,9 +450,10 @@ learnSynapse p prev syn =
 -- Punishing a synapses will help the region learn from wrong predictions.
 punishPredictedCell :: Package -> [Column] -> Cell -> Cell
 punishPredictedCell p prev cell =
-  if cell ^. cellState == PredictiveCell
+  if cell ^. cellState == PredictiveCell || cell ^. cellState == ActivePredictiveCell
     then cell & dendrites . traverse . traverse %~ punishSegment p prev
-    else cell
+      & cellState .~ InActiveCell
+    else cell & cellState .~ InActiveCell
 
 -- | For all synapses belonging to a cell, decrement the '_connectionStrength' with
 -- '_predictedDecrement' if a segment is 'MatchingSegment' or 'ActiveSegment'
@@ -491,7 +499,9 @@ computeMatchingStrength p prev seg = seg & matchingStrength .~ sumOn' (intToNatu
 synapseIsActive :: Package -> [Column] -> Synapse -> Bool
 synapseIsActive p prev syn =
   syn ^. connectionStrength > p ^. conH . temporalConfig . connectedPermenance
-    && ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState
+    &&  cellS == ActivePredictiveCell || cellS == ActiveCell
+    where 
+      cellS = getCell (syn ^. source {-changed-}) prev ^. cellState
 
 -------------------------------
 --      Activate Segment     --
@@ -512,14 +522,15 @@ updateSegmentState p seg
 --  update the state to ActivePredicted, if it is already active.
 --  Otherwise, update the state to Predicted.
 predictCells :: Package -> Column -> Column
-predictCells p col = col & cells %~ map (predictCell p)
+predictCells p col = col 
+  & cells %~ map (predictCell p) 
 
 -- | Helper function of predictColumn
 predictCell :: Package -> Cell -> Cell
 predictCell p cell =
   if predicted
-    then cell & cellState %~ (\x -> if x == ActiveCell then ActivePredictiveCell else PredictiveCell)
-    else cell & cellState %~ (\x -> if x == ActiveCell then x else InActiveCell)
+    then cell & cellState %~ (\x -> if x == ActiveCell || x == ActivePredictiveCell then ActivePredictiveCell else PredictiveCell)
+    else cell & cellState %~ (\x -> if x == ActiveCell || x == ActivePredictiveCell then ActiveCell else InActiveCell)
   where
     predicted = isPredicted p cell
 
@@ -542,4 +553,4 @@ segmentIsPredicted p b seg = b || seg ^. matchingStrength > p ^. conH . temporal
 
 -- | Move the region to the next time step.
 switch :: Region -> Region
-switch r = Region (r ^. previousStep) (r ^. currentStep)
+switch r = Region (clearColumnState (r ^. previousStep)) (clearColumnState (r ^. currentStep))
