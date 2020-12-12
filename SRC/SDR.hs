@@ -22,7 +22,7 @@ import GHC.Generics ( Generic )
 
 -- | A data type for the possible range of an SDR value.
 data SDRRange = SDRRange
-  { -- | The smallest sdr bit index. TODO remove this, because it is implisitly = 0
+  { -- | The smallest sdr bit index. Implisitly = 0
     _minIndex :: BitIndex,
     -- | The largest sdr bit index.
     _maxIndex :: BitIndex

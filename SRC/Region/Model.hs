@@ -21,10 +21,9 @@ import Control.Lens (makeLenses, (^.))
 import Data.List (intercalate)
 import Debug.Trace ()
 import GHC.Generics (Generic)
-import GHC.Natural (Natural, intToNatural, naturalToInt)
+import GHC.Natural (Natural)
 import SRC.CommonDataTypes (BitIndex, Index')
 import SRC.MovingAverage (MovingAverage (..))
-import System.Random (Random (randomR), getStdRandom)
 
 -- -------------------------------------------------------------
 --                           CONSTANTS
@@ -66,7 +65,7 @@ type ColumnIndex = Index'
 -- | Represent the indentity of a cell with in the list of cell it is contained in.
 type CellIndex = Index'
 
--- | TODO construct a data structure that caps this between 0 and 1
+-- | Represents a synapse connection, a float between 0 and 1
 type ConnectionStrength = Float
 
 -- | The two states a column can exist in.
