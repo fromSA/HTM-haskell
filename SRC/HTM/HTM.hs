@@ -548,6 +548,6 @@ segmentIsPredicted p b seg = b || seg ^. matchingStrength > p ^. conH . temporal
 --                         Switch
 ---------------------------------------------------------------
 
--- | Move the region to the next time step.
+-- | Prepare the region for the value.
 switch :: Region -> Region
 switch r = Region (clearColumnState (r ^. previousStep)) (clearColumnState (r ^. currentStep))
