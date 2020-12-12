@@ -52,22 +52,15 @@ library
                       , TEST.Region
   -- other-extensions:
   build-depends:      base >=4.13 && <=4.14
-                      --, haskell-say ^>=1.0.0.0
-                      , random
-                      , lens
-                      , extra ^>=1.7.8
-                      , random-shuffle ^>=0.0.4
-                      , data-accessor-template
-                      , QuickCheck
-                      , generic-random
-                      , quickcheck-instances
-                      , HUnit
-                      , pipes
-                      , pipes-csv
-                      , pipes-safe
-                      , pipes-bytestring
-                      , vector
-                      , cassava 
+                      , random == 1.2.*
+                      , lens == 4.19.*
+                      , extra ==1.7.*
+                      , random-shuffle ==0.0.*
+                      , data-accessor-template == 0.2.*
+                      , QuickCheck == 2.14.*
+                      , generic-random == 1.3.*
+                      , quickcheck-instances == 0.3.*
+                      , HUnit == 1.6.*
 
   -- hs-source-dirs:
   default-language:    Haskell2010
