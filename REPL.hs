@@ -20,6 +20,7 @@ import SRC.Encoder.Numeric
   )
 import SRC.HTM.Config
 import SRC.HTM.HTM
+import SRC.Region.Region
 import SRC.Package
 import SRC.SDR
 import System.Exit (exitFailure)

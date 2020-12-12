@@ -16,10 +16,7 @@
 -- Here is a longer description of this module, containing some
 -- commentary with @some markup@. TODO
 module SRC.HTM.HTM
-  ( module SRC.Region.Region,
-    module SRC.SDR,
-    module SRC.MovingAverage,
-    spatialPooler,
+  ( spatialPooler,
     temporalPooler,
     switch
   )
