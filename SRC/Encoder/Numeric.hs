@@ -17,6 +17,7 @@ import GHC.Natural (Natural, intToNatural, naturalToInt)
 import SRC.SDR (SDR (..), SDRRange (..))
 import SRC.Encoder.Config 
 
+-- | As the name indicates, this makes sure the encoder creates a valid SDR and is a bounded numeric encoder
 checkEncoderInvariant :: EncoderConfig -> Bool
 checkEncoderInvariant c =
   _maxVal c >= _minVal c
