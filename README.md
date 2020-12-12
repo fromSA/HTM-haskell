@@ -8,7 +8,7 @@ A Haskell implementation of the Hierarchical Temporal Memory algorithm, [(BAMI)]
 [Example](https://github.com/fromSA/HTM-haskell/wiki/Example)
 
 ## Documentation
-- [Haddock](file:///Users/fromsahera/FH/UIB/INF319/TheProject/HTM-haskell/dist-newstyle/build/x86_64-osx/ghc-8.8.4/HTM-haskell-0.1.0.0/doc/html/HTM-haskell/index.html) -- Not released yet
+[Haddock](file:///Users/fromsahera/FH/UIB/INF319/TheProject/HTM-haskell/dist-newstyle/build/x86_64-osx/ghc-8.8.4/HTM-haskell-0.1.0.0/doc/html/HTM-haskell/index.html) -- Not released yet
 
 ## Implementation milestone
 [See wiki](https://github.com/fromSA/HTM-haskell/wiki/Implementations)
