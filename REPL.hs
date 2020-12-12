@@ -1,13 +1,13 @@
 -- |
 -- Module      : REPL
--- Description : Read evaluate print loop for running HTM algorithm on a sequence of inputs.
+-- Description : An example use of this package
 -- Copyright   : (c) Fromsa Hera, 2020
 -- License     : AGPL-3.0-or-later
 -- Maintainer  : fromsahera28@gmail.com
 -- Stability   : experimental
 -- Portability : POSIX
 --
--- This modules contains an example use of This package. Just run 'main' in @cabal repl@ or @ghci@.
+-- This modules contains an example use of this package. Just run 'main' in @cabal repl@ or @ghci@.
 module REPL(main) where
 
 import Control.Lens ((^.))
