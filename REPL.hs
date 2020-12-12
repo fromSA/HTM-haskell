@@ -7,8 +7,8 @@
 -- Stability   : experimental
 -- Portability : POSIX
 --
--- This is an REPL interface for running the HTM algorithm. Just run 'main' in @cabal repl@ or @ghci@.
-module REPL where
+-- This modules contains an example use of This package. Just run 'main' in @cabal repl@ or @ghci@.
+module REPL(main) where
 
 import Control.Lens ((^.))
 import System.Random (mkStdGen)
