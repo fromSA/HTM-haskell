@@ -69,6 +69,7 @@ encode config val =
             =<< getRange config
     else Nothing
 
+-- | Check if the input value adhears to the configuraiton of the encoder.
 validInputValue :: EncoderConfig -> Int -> Bool
 validInputValue c i = i <= c ^. maxVal && i >= c ^. minVal
 
@@ -78,6 +79,7 @@ getStartOf n config = computeStart n (naturalToInt (config ^. buckets)) (config 
 
 --floor $ realToFrac (naturalToInt (config ^. buckets) * (n - config ^. minVal)) / realToFrac (config ^. maxVal - config ^. minVal)
 
+-- | A helper function for getStartOf.
 computeStart :: Int -> Int -> Int -> Int -> Natural
 computeStart n buckets minVal maxVal 
     | n > maxVal =  computeStart maxVal buckets minVal maxVal
