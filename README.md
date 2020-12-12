@@ -1,10 +1,10 @@
 # HTM-haskell [![Build Status](https://travis-ci.org/fromSA/HTM-haskell.svg?branch=master)](https://travis-ci.org/fromSA/HTM-haskell)
 A Haskell implementation of the Hierarchical Temporal Memory algorithm, [(BAMI)](https://numenta.com/resources/biological-and-machine-intelligence/) by [Numenta](https://numenta.com/). 
 
-# Installation
+## Installation
 - Will be available on [Hackage](https://hackage.haskell.org/) through [Cabal](https://www.haskell.org/cabal/).
 
-# Example
+## Example
 [Example](https://github.com/fromSA/HTM-haskell/wiki/Example)
 
 ## Documentation
