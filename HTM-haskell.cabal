@@ -7,11 +7,7 @@ name:                HTM-haskell
 version:             0.1.0.0
 synopsis:            implementation of Numentas HTM algorithm
 description:         A simulation of a region in a neocortex. The algorithm is developed by
-                     the numenta research group. 
-                     Check 
-                     1. https://arxiv.org/pdf/1601.06116.pdf 
-                     2. https://numenta.com/resources/biological-and-machine-intelligence/spatial-pooling-algorithm/ The spatial pooler
-                     3. https://numenta.com/assets/pdf/temporal-memory-algorithm/Temporal-Memory-Algorithm-Details.pdf The temporal pooler
+                     the numenta research group. README : https://github.com/fromSA/HTM-haskell
 
 -- bug-reports:
 license:             AGPL-3.0-or-later
