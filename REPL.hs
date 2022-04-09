@@ -24,6 +24,7 @@ import SRC.Region.Region
 import SRC.Package
 import SRC.SDR
 import System.Exit (exitFailure)
+import Control.Monad (when)
 
 initEncoderConfig :: EncoderConfig
 initEncoderConfig =
@@ -92,6 +93,21 @@ initConfigs = do
           }
     Nothing -> exitFailure
 
+
+saveToFile :: Int -> SDR -> IO()
+saveToFile v s = do
+        let str = show v ++ ", " ++ show (s^.sdr) ++ "\n"
+        appendFile "OutputFile.txt" str
+
+main2 :: IO()
+main2 = do 
+  let conS = initEncoderConfig
+  case encode conS 20 of 
+    Just p -> 
+      saveToFile 20 p
+    Nothing ->
+      print "No ouput"
+
 main :: IO ()
 main = do
   -- Configerations
@@ -106,6 +122,11 @@ main = do
   -- Learning/Predicting, i.e. spatial and temporal poolers
   compute seqData package region
 
+saveStrToFile :: FilePath -> Int -> String -> IO ()
+saveStrToFile f v s = do
+  let str = show v ++ ", " ++ s ++ "\n"
+  appendFile f str
+
 -- | Apply HTM on a sequence of input data.
 compute :: [Int] -> Package -> Region -> IO ()
 compute [] _ _ = do
@@ -114,17 +135,21 @@ compute [] _ _ = do
 compute (x : xs) p region = do
   putStrLn $ "----- next encoding. val: " ++ show x
   let encodedSDR = encode (p^.conS) x
-
+  
   case encodedSDR of
     Just val ->
       do
-        print val
+        -- print val
+        -- save encoding to file
+        saveToFile x val
         -- Spatial Encoding
         let regionSpat = spatialPooler p {_value = val} region -- Updates columnState among other variables
 
         -- Temporal encoding
         regionTemp <- temporalPooler p regionSpat -- Updates cellState among other variables
         putStrLn $ displayRegion regionTemp -- This shows the state of all cells
+
+        saveStrToFile "region.txt" x $ displayRegion regionTemp
         
         compute xs p $ switch regionTemp
     Nothing ->

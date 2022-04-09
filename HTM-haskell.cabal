@@ -47,7 +47,7 @@ library
                       , TEST.MovingAverage
                       , TEST.Region
   -- other-extensions:
-  build-depends:      base >=4.13 && <=4.14
+  build-depends:      base >=4.13 
                       , random == 1.2.*
                       , lens == 4.19.*
                       , extra ==1.7.*
