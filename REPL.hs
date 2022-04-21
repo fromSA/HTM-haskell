@@ -26,6 +26,10 @@ import SRC.SDR
 import System.Exit (exitFailure)
 import Control.Monad (when)
 
+import Diagrams.Prelude 
+import Diagrams.Backend.SVG
+import Diagrams.Size
+
 initEncoderConfig :: EncoderConfig
 initEncoderConfig =
   EncoderConfig
@@ -97,14 +101,25 @@ initConfigs = do
 saveToFile :: Int -> SDR -> IO()
 saveToFile v s = do
         let str = show v ++ ", " ++ show (s^.sdr) ++ "\n"
-        appendFile "OutputFile.txt" str
+        appendFile "Output/OutputFile.txt" str
+
+
+filePath = "Output/c.svg"
+figSize = mkSizeSpec2D (Just 400) (Just 400)
+row ss = renderSVG filePath figSize $ visualize ss
+
+renderFig = renderSVG filePath figSize
+
+
+columnss :: [Diagram B] -> Diagram B
+columnss (x:xs) = foldl (===) x xs
 
 main2 :: IO()
 main2 = do 
   let conS = initEncoderConfig
   case encode conS 20 of 
     Just p -> 
-      saveToFile 20 p
+      row p
     Nothing ->
       print "No ouput"
 
@@ -120,7 +135,9 @@ main = do
   let seqData = [20, 20, 20, 20, 20, 20, 20, 20, 77, 77, 77, 77, 77, 77, 77, 30, 30, 30, 30]
 
   -- Learning/Predicting, i.e. spatial and temporal poolers
-  compute seqData package region
+  rows <- compute [] seqData package region
+
+  renderFig $ columnss rows
 
 saveStrToFile :: FilePath -> Int -> String -> IO ()
 saveStrToFile f v s = do
@@ -128,20 +145,21 @@ saveStrToFile f v s = do
   appendFile f str
 
 -- | Apply HTM on a sequence of input data.
-compute :: [Int] -> Package -> Region -> IO ()
-compute [] _ _ = do
+compute :: [Diagram B] -> [Int] -> Package -> Region -> IO [Diagram B]
+compute ds [] _ _ = do
   putStrLn "encoding completed"
+  return ds
 
-compute (x : xs) p region = do
+compute ds (x:xs) p region = do
   putStrLn $ "----- next encoding. val: " ++ show x
   let encodedSDR = encode (p^.conS) x
-  
   case encodedSDR of
     Just val ->
       do
+        let d = visualize val
         -- print val
         -- save encoding to file
-        saveToFile x val
+        --saveToFile x val
         -- Spatial Encoding
         let regionSpat = spatialPooler p {_value = val} region -- Updates columnState among other variables
 
@@ -149,9 +167,14 @@ compute (x : xs) p region = do
         regionTemp <- temporalPooler p regionSpat -- Updates cellState among other variables
         putStrLn $ displayRegion regionTemp -- This shows the state of all cells
 
-        saveStrToFile "region.txt" x $ displayRegion regionTemp
+        --saveStrToFile "Output/region.txt" x $ displayRegion regionTemp
         
-        compute xs p $ switch regionTemp
-    Nothing ->
+        compute (d:ds) xs p $ switch regionTemp
+
+    Nothing -> do
       print "Invalid value"
+      return ds
+      
+    
+  
 
