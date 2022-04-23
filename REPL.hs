@@ -105,10 +105,10 @@ saveToFile v s = do
 
 
 filePath = "Output/c.svg"
-figSize = mkSizeSpec2D (Just 400) (Just 400)
+figSize = mkSizeSpec2D (Just 2700) (Just 900)
 row ss = renderSVG filePath figSize $ visualize ss
 
-renderFig = renderSVG filePath figSize
+toSVG f = renderSVG f figSize
 
 
 columnss :: [Diagram B] -> Diagram B
@@ -132,12 +132,17 @@ main = do
   region <- initRegion (package^. conS) (package^.conR)
 
   -- InputData
-  let seqData = [20, 20, 20, 20, 20, 20, 20, 20, 77, 77, 77, 77, 77, 77, 77, 30, 30, 30, 30]
+  let d1 = concat (replicate 35 [(2,14), (2,2)])
+  let d2 = concat (replicate 35 [(2,14), (2,33)])
+  let d3 = concat (replicate 35 [(2,77), (2,55)])
+  let seqData = concat [replicate a b | (a,b) <- [(2,14), (2,12)] ++ d1 ++ d2 ++ d3]
 
   -- Learning/Predicting, i.e. spatial and temporal poolers
-  rows <- compute [] seqData package region
+  s <- compute ([],[]) seqData package region
 
-  renderFig $ columnss rows
+  toSVG "Output/sdr.svg" $ columnss (fst s)
+
+  toSVG "Output/region.svg" $ columnss (snd s)
 
 saveStrToFile :: FilePath -> Int -> String -> IO ()
 saveStrToFile f v s = do
@@ -145,18 +150,18 @@ saveStrToFile f v s = do
   appendFile f str
 
 -- | Apply HTM on a sequence of input data.
-compute :: [Diagram B] -> [Int] -> Package -> Region -> IO [Diagram B]
-compute ds [] _ _ = do
+compute :: ([Diagram B],[Diagram B]) -> [Int] -> Package -> Region -> IO ([Diagram B],[Diagram B])
+compute (ss,rs) [] _ _ = do
   putStrLn "encoding completed"
-  return ds
+  return (ss,rs)
 
-compute ds (x:xs) p region = do
+compute (ss,rs) (x:xs) p region = do
   putStrLn $ "----- next encoding. val: " ++ show x
   let encodedSDR = encode (p^.conS) x
   case encodedSDR of
     Just val ->
       do
-        let d = visualize val
+        let s = visualize val
         -- print val
         -- save encoding to file
         --saveToFile x val
@@ -165,16 +170,17 @@ compute ds (x:xs) p region = do
 
         -- Temporal encoding
         regionTemp <- temporalPooler p regionSpat -- Updates cellState among other variables
-        putStrLn $ displayRegion regionTemp -- This shows the state of all cells
+        -- putStrLn $ displayRegion regionTemp -- This shows the state of all cells
 
         --saveStrToFile "Output/region.txt" x $ displayRegion regionTemp
+
+        let r = renderRegion regionTemp
         
-        compute (d:ds) xs p $ switch regionTemp
+        compute (ss++[s],rs++[r])  xs p $ switch regionTemp
 
     Nothing -> do
       print "Invalid value"
-      return ds
+      return (ss,rs)
       
     
-  
 

@@ -25,6 +25,10 @@ import GHC.Natural (Natural)
 import SRC.CommonDataTypes (BitIndex, Index')
 import SRC.MovingAverage (MovingAverage (..))
 
+import Diagrams.Prelude 
+import Diagrams.Backend.SVG
+import Diagrams.Size
+
 -- -------------------------------------------------------------
 --                           CONSTANTS
 -- -------------------------------------------------------------
@@ -150,10 +154,10 @@ data Segment = Segment
   }
   deriving (Eq, Show, Generic)
 
-makeLenses ''Segment
+makeLenses ''SRC.Region.Model.Segment
 
 -- | A collection of segments. A dendrite can come from within the same region or from another region.
-type Dendrite = [Segment]
+type Dendrite = [SRC.Region.Model.Segment]
 
 -- | A data structure representing a neuron
 data Cell = Cell
@@ -262,3 +266,28 @@ instance Show Column where
 
 -- instance Show CellID where
 -- show = show . _col
+
+---- To SVG
+
+renderRegion :: Region -> Diagram B
+renderRegion r = let x:xs =  map renderColumn (r^.currentStep) in
+                    foldl (|||) x xs
+
+renderColumn :: Column -> Diagram B
+renderColumn c = let x:xs =  map renderCell (c^.cells) in
+                    foldl (|||) x xs
+
+renderCell :: Cell -> Diagram B
+renderCell c = renderCellState (c^.cellState) 
+                  
+
+renderCellState :: CellState -> Diagram B
+renderCellState ActiveCell = visualCell 1 green
+renderCellState PredictiveCell = visualCell 1 yellow
+renderCellState ActivePredictiveCell = visualCell 1 red
+renderCellState InActiveCell = visualCell 1 white
+
+visualCell :: Double -> Colour Double -> Diagram B
+visualCell x c = square x # fc c
+                      # lw ultraThin
+                      # lc black
