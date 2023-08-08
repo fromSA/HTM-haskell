@@ -16,7 +16,7 @@ module SRC.Package where
 import SRC.HTM.Config
 import SRC.Region.Config
 import SRC.Encoder.Config
-import SRC.SDR (SDR)
+import SRC.SDR (SDR, SDRRange)
 import Control.Lens
 import System.Random (StdGen)
 
@@ -27,12 +27,12 @@ data Package = Package
     -- | The configuration parameters for a Region.
     _conR :: RegionConfig,
     -- | The configuration parameters for the SDR encoding.
-    _conS :: EncoderConfig,
+    _conS :: Maybe SDRRange,
     -- | The SDR encoding of the current value.
     _value :: SDR,
     -- | And StdGen for generating random values. Should always be updated after use. For future update.
     _randomGenerator :: StdGen
-  }
+  } deriving (Show)
 
 -- | Lenses for HTMConfig, used to navigate the record.
 makeLenses ''Package

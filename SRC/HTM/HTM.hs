@@ -525,11 +525,11 @@ predictCells p col = col
 -- | Helper function of predictColumn
 predictCell :: Package -> Cell -> Cell
 predictCell p cell =
-  if predicted
-    then cell & cellState %~ (\x -> if x == ActiveCell || x == ActivePredictiveCell then ActivePredictiveCell else PredictiveCell)
-    else cell & cellState %~ (\x -> if x == ActiveCell || x == ActivePredictiveCell then ActiveCell else InActiveCell)
-  where
-    predicted = isPredicted p cell
+    if p ^. (conH. temporalConfig. selfPredict) &&  predicted
+      then cell & cellState %~ (\x -> if x == ActiveCell || x == ActivePredictiveCell then ActivePredictiveCell else PredictiveCell)
+      else cell & cellState %~ (\x -> if x == ActiveCell || x == ActivePredictiveCell then ActiveCell else InActiveCell)
+    where
+      predicted = isPredicted p cell
 
 -- | Helper function of maybePredict
 isPredicted :: Package -> Cell -> Bool

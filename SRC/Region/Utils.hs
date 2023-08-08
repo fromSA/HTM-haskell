@@ -54,8 +54,8 @@ getRandomCell conR notCell columns = do
     else return randCell
 
 -- | Returns a list of random SDR indecies from the SDR range defined by the encoder configuration.
-selectRandomIndecies :: EncoderConfig -> RegionConfig -> [IO BitIndex]
-selectRandomIndecies conS conR = maybe [] (randIndecies (conR ^. initNrOfFeedForwardSynpases)) (getRange conS)
+selectRandomIndecies :: Maybe SDRRange -> RegionConfig -> [IO BitIndex]
+selectRandomIndecies conS conR = maybe [] (randIndecies (conR ^. initNrOfFeedForwardSynpases)) conS
 
 -- | Returns n random bit indecies from an sdr range.
 randIndecies :: Natural -> SDRRange -> [IO BitIndex]
@@ -80,7 +80,7 @@ getRandomIndexBetween mi ma = do
 
 -- | Construct a new region.
 -- This function returns an IO Region monad because it uses the StdRandom as a random generator.
-initRegion :: EncoderConfig -> RegionConfig -> IO Region
+initRegion :: Maybe SDRRange -> RegionConfig -> IO Region
 initRegion conS conR = do
   region <- initAllDendrites conR $ initColumns conS conR
   let regions = replicate 2 region -- make a copy of region
@@ -91,11 +91,11 @@ initRegion conS conR = do
       }
 
 -- | Construct all columns in a region.
-initColumns :: EncoderConfig -> RegionConfig -> IO [Column]
+initColumns :: Maybe SDRRange -> RegionConfig -> IO [Column]
 initColumns conS conR = mapM (initsingleColumn conS conR) [_START_INDEX .. conR ^. nrOfColumns]
 
 -- | Construct a column.
-initsingleColumn :: EncoderConfig -> RegionConfig -> Natural -> IO Column
+initsingleColumn :: Maybe SDRRange -> RegionConfig -> Natural -> IO Column
 initsingleColumn conS conR columnIndex = do
   fs <- initFeedForwardSynapses conS conR
   let c =
@@ -185,7 +185,7 @@ newSynapse conR toCell fromCell =
     }
 
 -- | Construct feedforward synapses.
-initFeedForwardSynapses :: EncoderConfig -> RegionConfig -> IO [FeedForwardSynapse]
+initFeedForwardSynapses :: Maybe SDRRange -> RegionConfig -> IO [FeedForwardSynapse]
 initFeedForwardSynapses conS conR = mapM (singleFeedForwardSynapse conR) $ selectRandomIndecies conS conR -- FIXME this is a list of the synapses
 
 -- | Construct a single feedforward synapse.

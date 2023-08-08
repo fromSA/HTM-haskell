@@ -44,7 +44,7 @@ data RegionConfig = RegionConfig
     -- | A constant value, represents the initial radius of a columns neighbourhood.
     _initRad :: Natural
 
-  }
+  } deriving (Show)
 
 makeLenses ''RegionConfig
 

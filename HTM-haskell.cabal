@@ -27,7 +27,75 @@ tested-with: GHC ==8.6.4
 source-repository head
   type: git
   location: https://github.com/fromSA/HTM-haskell.git 
-    
+
+flag jsaddle
+  manual: True
+  default:
+    False
+  description:
+    Compile with JSaddle
+
+flag ios
+  manual: True
+  default:
+    False
+  description:
+    Cross compile to iOS
+
+executable app
+  main-is:              MisoFrontEnd.hs
+  default-language:    Haskell2010
+  if !impl(ghcjs) && !flag(jsaddle)
+    buildable: False
+  else
+    ghcjs-options:
+      -dedupe
+    cpp-options:
+      -DGHCJS_BROWSER
+    --hs-source-dirs:
+      
+    build-depends:
+      aeson,
+      base,
+      containers,
+      miso,
+      transformers,
+      jsaddle-wkwebview,
+      jsaddle
+    default-language:
+      Haskell2010
+    if flag(ios)
+      cpp-options:
+        -DIOS
+      ghc-options:
+        -threaded
+      build-depends:
+        jsaddle-wkwebview
+    else
+      build-depends:
+        jsaddle-warp
+
+
+executable agentserver
+  main-is:             AgentSocket.hs
+  default-language:    Haskell2010  
+  build-depends:
+    HTM-haskell,
+    aeson,
+    base,
+    network-simple,
+    bytestring,
+    lens,
+    diagrams,
+    diagrams-lib,
+    diagrams-svg,
+    extra,
+    split,
+    random, 
+    random-shuffle
+
+
+
 library
   exposed-modules:    REPL
                       , SRC.HTM.HTM
@@ -43,12 +111,12 @@ library
                       , SRC.CommonDataTypes
                       , SRC.Package
                       , SRC.MAIN
-  --main-is:             Main.hs
+  --main-is:            MisoFrontEnd.hs
   other-modules:      TEST.Encoder
                       , TEST.MovingAverage
                       , TEST.Region
   -- other-extensions:
-  build-depends:      base >=4.13 
+  build-depends:      base >= 4.13 
                       , random == 1.2.*
                       , lens == 4.19.*
                       , extra ==1.7.*
@@ -62,6 +130,11 @@ library
                       , diagrams == 1.4.0.1
                       , diagrams-lib == 1.4.5.1
                       , diagrams-svg == 1.4.3.1
+                      , miso
+                      , split == 0.2.*
+                      , fgl == 5.8.*
+
+
 
   -- hs-source-dirs:
   default-language:    Haskell2010

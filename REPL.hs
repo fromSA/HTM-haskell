@@ -8,7 +8,7 @@
 -- Portability : POSIX
 --
 -- This modules contains an example use of this package. Just run 'main' in @cabal repl@ or @ghci@.
-module REPL(main) where
+module REPL(initConfigs, initHTMConfig, initRegionConfig, initEncoderConfig) where
 
 import Control.Lens ((^.))
 import System.Random (mkStdGen)
@@ -45,7 +45,7 @@ initRegionConfig =
   RegionConfig
     { _nrOfColumns = 100,
       _nrOfCellsPerColumn = 2,
-      _initNrOfFeedForwardSynpases = 20,
+      _initNrOfFeedForwardSynpases = 40,
       _nrOfSynapsesPerSegment = 4,
       _mappingType = Random,
       _initConnectionStrength = 0.7,
@@ -75,7 +75,8 @@ initHTMConfig =
             _permanenceIncrement = 0.2,
             _permanenceDecrement = 0.2,
             _learningThreshold = 2,
-            _learningEnabled = True
+            _learningEnabled = True,
+            _selfPredict = True
           }
     }
 
@@ -91,7 +92,7 @@ initConfigs = do
         Package
           { _conH = h,
             _conR = r,
-            _conS = s,
+            _conS = Nothing,--s,
             _value = SDR [] a,
             _randomGenerator = mkStdGen 12
           }
@@ -157,7 +158,7 @@ compute (ss,rs) [] _ _ = do
 
 compute (ss,rs) (x:xs) p region = do
   putStrLn $ "----- next encoding. val: " ++ show x
-  let encodedSDR = encode (p^.conS) x
+  let encodedSDR = Nothing --encode (p^.conS) x
   case encodedSDR of
     Just val ->
       do

@@ -24,7 +24,7 @@ data SpatialConfig = SpatialConfig
     _pConthresh :: Float,
     -- | The desired column activity level within inhibition radius i.e. the number of columns that should be activated within the inhibition radius.
     _colActLev :: Natural
-  }
+  } deriving (Show)
 
 makeLenses ''SpatialConfig
 
@@ -47,8 +47,10 @@ data TemporalConfig = TemporalConfig
     -- | The number of synapses per segment that must be active for the segment to be considered active. should be less than nrOfSynapsesPerSegment of RegionConfig
     _activationThreshold :: Natural,
     -- | True if the temporalPooler should update the connectionstrengths of the synapses.
-    _learningEnabled :: Bool
-  }
+    _learningEnabled :: Bool,
+    -- | Used to toggel using self-prediction
+    _selfPredict :: Bool
+  } deriving (Show)
 
 makeLenses ''TemporalConfig
 
@@ -58,7 +60,7 @@ data HTMConfig = HTMConfig
     _spatialConfig :: SpatialConfig,
     -- | see 'TemporalConfig'
     _temporalConfig :: TemporalConfig
-  }
+  } deriving (Show)
 
 -- | Lenses for HTMConfig, used to navigate the record.
 makeLenses ''HTMConfig
@@ -81,7 +83,8 @@ defualtTemporalConfig =
       _connectedPermenance = 0.6,
       _learningThreshold = 5,
       _activationThreshold = 7,
-      _learningEnabled = True
+      _learningEnabled = True,
+      _selfPredict = True
     }
 
 defualtSpatialConfig :: SpatialConfig
