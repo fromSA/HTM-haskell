@@ -41,19 +41,23 @@ getRange conE =
 --
 -- >>> let encoder = EncoderConfig Numeric 2 10 8 1
 -- >>> encode 2 encoder
--- Just (SDR {_sdr = [0], _sdrRange = SDRRange {_minIndex = 0, _maxIndex = 8}})
+-- WAS Just (SDR {_sdr = [0], _sdrRange = SDRRange {_minIndex = 0, _maxIndex = 8}})
+-- NOW Couldn't match expected type ‘Int’ with actual type ‘EncoderConfig’
 --
 -- >>> let encoder = EncoderConfig Numeric 2 10 8 4
 -- >>> encode 2 encoder
--- Just (SDR {_sdr = [0,1,2,3], _sdrRange = SDRRange {_minIndex = 0, _maxIndex = 11}})
+-- WAS Just (SDR {_sdr = [0,1,2,3], _sdrRange = SDRRange {_minIndex = 0, _maxIndex = 11}})
+-- NOW Couldn't match expected type ‘Int’ with actual type ‘EncoderConfig’
 --
 -- >>> let encoder = EncoderConfig Numeric 2 10 8 1
 -- >>> encode 1 encoder
--- Nothing
+-- WAS Nothing
+-- NOW Couldn't match expected type ‘Int’ with actual type ‘EncoderConfig’
 --
 -- >>> let encoder = EncoderConfig Numeric 2 10 8 1
 -- >>> encode 11 encoder
--- Nothing
+-- WAS Nothing
+-- NOW Couldn't match expected type ‘Int’ with actual type ‘EncoderConfig’
 encode :: EncoderConfig -> Int -> Maybe SDR
 encode config val =
   if validInputValue config val

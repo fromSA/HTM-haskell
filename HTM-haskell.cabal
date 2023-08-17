@@ -99,6 +99,7 @@ executable agentserver
 library
   exposed-modules:    REPL
                       , SRC.HTM.HTM
+                      , SRC.HTM.HTM2
                       , SRC.HTM.Config
                       , SRC.Region.Region
                       , SRC.Region.Model

@@ -196,7 +196,7 @@ temporalPooler p r = do
 -- | Put a region within the context of the previous step.
 addContext :: Package -> Region -> IO Region
 addContext p r = do
-  let prevWinnerCells = collectCells (^. isWinner) (r ^. previousStep)
+  let prevWinnerCells = collectCells (^. isWinner) (r ^. previousStep) -- winnerCell is a cell that is active = predicted right or (selected from bursted cells). Used to grow new synapses to it
   a <- activateColumns p prevWinnerCells (r ^. previousStep) $ zip (r ^. currentStep) (r ^. previousStep)
   return $ r & currentStep .~ a
 
@@ -465,7 +465,7 @@ punishSegment p prev seg =
 -- '_predictedDecrement' if a synapse is connected to an active cell
 punishSynapse :: Package -> [Column] -> Synapse -> Synapse
 punishSynapse p prev syn =
-  if ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState
+  if ActiveCell == getCell (syn ^. source {-changed-}) prev ^. cellState 
     then syn & connectionStrength -~ p ^. conH . temporalConfig . predictedDecrement
     else syn
 

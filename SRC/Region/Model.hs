@@ -28,6 +28,7 @@ import SRC.MovingAverage (MovingAverage (..))
 import Diagrams.Prelude 
 import Diagrams.Backend.SVG
 import Diagrams.Size
+--import TEST.Region (chinDendrite)
 
 -- -------------------------------------------------------------
 --                           CONSTANTS
@@ -159,12 +160,22 @@ makeLenses ''SRC.Region.Model.Segment
 -- | A collection of segments. A dendrite can come from within the same region or from another region.
 type Dendrite = [SRC.Region.Model.Segment]
 
+-- | Dendrites that belong to a cell; one proximal and a set of distal
+data Dendrites = Dendrites{
+    _proximal :: Dendrite,
+    _distal :: [Dendrite]
+}   deriving (Eq, Show, Generic)
+
+makeLenses ''Dendrites 
+
 -- | A data structure representing a neuron
 data Cell = Cell
   { -- | A unique id representing a cell within a region.
     _cellId :: CellID,
     -- | A set of dendrites.
     _dendrites :: [Dendrite],
+    -- | a new structure for dendrites, seperates proximal and distal 
+    _dendrites2 :: Dendrites,
     -- | The state of this cell.
     _cellState :: CellState,
     -- | This cell is a winner if it is choosen to represent the current encoding. i.e.
